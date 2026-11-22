@@ -20,9 +20,8 @@ const ALLOWED_TOOL_NAMES = [
   'schema.describe',
   'records.query',
   'records.get',
-  'records.create',
-  'records.update',
-  'records.delete',
+  // TripHive: read-only. Itinerary changes go through Hive's proposals
+  // (src/ai/trip-tools.ts) so the group votes before anything lands.
   'user.current',
 ]
 

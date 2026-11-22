@@ -36,6 +36,9 @@ import {
 import type { AgentToolAccessResult, AgentToolRouteOptions, ChatTurn } from 'deepspace/worker'
 import { schemas } from '../schemas.js'
 import { buildSystemPrompt } from './tools.js'
+import { buildTripTools, tripSystemPrompt } from './trip-tools.js'
+import { createActionTools } from '../server/action-routes.js'
+import { TripError, requireMember } from '../server/trips.js'
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
 import type { Env, AppContext } from '../../worker.js'
@@ -151,11 +154,13 @@ export function registerAiChatRoutes(
     const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
     if (!jwt) return c.json({ error: 'Unauthorized' }, 401)
 
-    const { chatId, userMessageId, content, modelId } = await c.req.json<{
+    const { chatId, userMessageId, content, modelId, tripId } = await c.req.json<{
       chatId?: string
       userMessageId?: string
       content?: string
       modelId?: string
+      /** TripHive: binds Hive's tools to one trip after a membership check. */
+      tripId?: string
     }>()
     if (typeof chatId !== 'string' || !chatId) return c.json({ error: 'chatId is required' }, 400)
     if (typeof userMessageId !== 'string' || !userMessageId)
@@ -177,6 +182,20 @@ export function registerAiChatRoutes(
         },
         400,
       )
+    }
+
+    // TripHive: verify membership BEFORE any model call. The tripId comes from
+    // the client, so it is only trusted after requireMember passes.
+    let tripTools: ReturnType<typeof buildTripTools> | null = null
+    if (typeof tripId === 'string' && tripId) {
+      const privileged = createActionTools(c.env, auth.userId, jwt)
+      try {
+        await requireMember(privileged, tripId, auth.userId)
+      } catch (err) {
+        if (err instanceof TripError) return c.json({ error: err.message }, 403)
+        throw err
+      }
+      tripTools = buildTripTools(privileged, tripId, auth.userId)
     }
 
     const stub = recordRoomStub(c.env)
@@ -240,7 +259,9 @@ export function registerAiChatRoutes(
       provider: selectedModel.provider,
       modelId: usedModelId,
     }
-    const baseSystem = buildSystemPrompt(c.env.APP_NAME, schemas)
+    const baseSystem = tripTools
+      ? tripSystemPrompt(new Date().toISOString().slice(0, 10))
+      : buildSystemPrompt(c.env.APP_NAME, schemas)
 
     // Compaction inserts at most one summary system message at index 0; fold
     // it into the top-level `system` so we don't pass two system roles. Then
@@ -257,10 +278,13 @@ export function registerAiChatRoutes(
     // mid-stream. The local assistant routes use the same executor and
     // context, and streamDeepSpaceAgent caps each tool result for the model,
     // keeping both surfaces' tool behavior identical.
-    const tools = buildTools(
-      createUserToolExecutor(c.env, auth.userId, c.req.raw.signal, { room: access.room }),
-      { env: c.env, userId: auth.userId, request: c.req.raw },
-    )
+    // Trip chats get ONLY Hive's trip-scoped tools (no generic record writes).
+    const tools =
+      tripTools ??
+      buildTools(
+        createUserToolExecutor(c.env, auth.userId, c.req.raw.signal, { room: access.room }),
+        { env: c.env, userId: auth.userId, request: c.req.raw },
+      )
 
     // Allocate the assistant row id BEFORE streaming starts so we can echo it
     // back via a response header. The client tags its in-flight overlay with

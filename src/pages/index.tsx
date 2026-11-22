@@ -1,49 +1,85 @@
 /**
- * Landing page — a STATIC page.
- *
- * It lives at the top level of src/pages/ (not under (app)/), so it renders
- * with no DeepSpace providers: no auth session fetch, no records WebSocket.
- * That makes it cheap to serve and safe for logged-out / crawler traffic.
- *
- * Need live data or auth here? Move this file to src/pages/(app)/index.tsx
- * and it becomes a dynamic page. Conversely, any page you want to keep static
- * (marketing, docs, legal) belongs at this top level.
- *
- * Top-level pages are also prerendered to static HTML at build
- * (prerender.ts, via vite.config.ts) so crawlers read real content.
- * Keep them renderable without a browser: no window/document during render,
- * prose in HTML text, reveal animations in CSS keyframes rather than JS-driven
- * initial states. `<Seo>` comes first and reads src/seo.ts.
+ * Landing page — static (no DeepSpace providers), prerendered for crawlers.
  */
-
 import { Link } from 'react-router-dom'
 import { Seo } from '../components/Seo'
-import { APP_NAME } from '../constants'
 import { seo } from '../seo'
+
+const FEATURES = [
+  {
+    emoji: '🗓️',
+    title: 'One live itinerary',
+    body: 'Everyone edits the same day-by-day board. Changes, cursors and “Ana is editing…” show up instantly.',
+  },
+  {
+    emoji: '🩺',
+    title: 'Plan Doctor',
+    body: 'Catches overlaps, impossible travel gaps, missed meals, rainy outdoor days, budget and pace clashes.',
+  },
+  {
+    emoji: '🐝',
+    title: 'Hive, your trip agent',
+    body: 'Researches real places, checks weather and routes, and proposes fixes that respect everyone’s style.',
+  },
+  {
+    emoji: '🗳️',
+    title: 'The group decides',
+    body: 'Hive never edits your plan. Every suggestion is a card the group votes on; majority wins.',
+  },
+]
 
 export default function Landing() {
   return (
     <>
       <Seo {...seo} path="/" />
-      <div
-        data-testid="static-landing"
-        className="flex min-h-screen flex-col items-center justify-center px-6 text-center"
-      >
-        <p className="mb-3 text-sm uppercase tracking-widest text-muted-foreground">{APP_NAME}</p>
-        <h1 className="mb-4 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          A DeepSpace app with a static front door
-        </h1>
-        <p className="mb-8 max-w-md text-muted-foreground">
-          This landing page ships no auth call and no realtime connection — it's a
-          plain static page. The live app, with sign-in and synced data, lives
-          behind the link below.
-        </p>
-        <Link
-          to="/home"
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Enter the app
-        </Link>
+      <div data-testid="static-landing" className="min-h-screen bg-background text-foreground">
+        <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+          <span className="font-display text-xl font-bold">🐝 TripHive</span>
+          <Link to="/trips" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            Sign in
+          </Link>
+        </header>
+
+        <section className="mx-auto max-w-6xl px-6 pb-16 pt-10 sm:pt-20">
+          <p className="mb-4 inline-block rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">
+            Group trip planning, minus the group-chat chaos
+          </p>
+          <h1 className="font-display max-w-3xl text-5xl font-bold leading-[1.05] sm:text-6xl">
+            Plan the trip <span className="text-primary">together</span>. Let Hive keep it realistic.
+          </h1>
+          <p className="mt-6 max-w-xl text-lg text-muted-foreground">
+            A shared, real-time itinerary for friends — with an AI planner that finds places, spots conflicts,
+            and suggests changes the whole group votes on.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              to="/trips"
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:opacity-90"
+            >
+              Start a trip
+            </Link>
+            <Link
+              to="/trips"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-6 py-3 text-sm font-semibold transition hover:bg-accent"
+            >
+              I have an invite code
+            </Link>
+          </div>
+        </section>
+
+        <section className="mx-auto grid max-w-6xl gap-4 px-6 pb-24 sm:grid-cols-2 lg:grid-cols-4">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-3 text-2xl">{f.emoji}</div>
+              <h2 className="font-semibold">{f.title}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{f.body}</p>
+            </div>
+          ))}
+        </section>
+
+        <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+          Built on DeepSpace · Maps © OpenStreetMap contributors
+        </footer>
       </div>
     </>
   )

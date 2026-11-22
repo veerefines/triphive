@@ -8,6 +8,7 @@ import type { ActionContext, ActionHandler, ActionResult } from 'deepspace/worke
 import type { Env } from '../../worker'
 import {
   TripError,
+  cleanStop,
   createTrip,
   geocodePlace,
   getTrip,
@@ -55,6 +56,39 @@ export const actions: Record<string, ActionHandler<Env>> = {
     await tools.remove('team_members', me.recordId)
     await logActivity(tools, tripId, userId, 'left the trip')
     return { left: true }
+  }),
+
+  /** Create a stop. Members can edit stops directly; creation is gated here. */
+  addStop: safe(async ({ tools, userId, params }) => {
+    const tripId = str(params.tripId)
+    await requireMember(tools, tripId, userId)
+    const stop = cleanStop((params.stop ?? {}) as Partial<StopData>, false)
+    const r = await tools.create('stops', { ...stop, tripId, source: 'human' })
+    if (!r.success) throw new TripError(r.error)
+    return { stopId: r.data.recordId }
+  }),
+
+  /** Upsert the caller's own travel preferences for a trip. */
+  savePrefs: safe(async ({ tools, userId, params }) => {
+    const tripId = str(params.tripId)
+    await requireMember(tools, tripId, userId)
+    const p = (params.prefs ?? {}) as Record<string, unknown>
+    const pace = ['chill', 'balanced', 'packed'].includes(String(p.pace)) ? String(p.pace) : 'balanced'
+    const budget = Number(p.dailyBudget)
+    const wake = /^([01]?\d|2[0-3]):[0-5]\d$/.test(String(p.wakeTime ?? '')) ? String(p.wakeTime) : undefined
+    const data = {
+      pace,
+      dailyBudget: Number.isFinite(budget) && budget > 0 ? Math.round(budget) : undefined,
+      interests: str(p.interests).slice(0, 300),
+      dietary: str(p.dietary).slice(0, 200),
+      wakeTime: wake,
+    }
+    const existing = await tools.query('prefs', { where: { tripId, userId }, limit: 1 })
+    const row = existing.success ? existing.data.records[0] : undefined
+    const r = row ? await tools.update('prefs', row.recordId, data) : await tools.create('prefs', { ...data, tripId, userId })
+    if (!r.success) throw new TripError(r.error)
+    await runPlanCheck(tools, tripId)
+    return { saved: true }
   }),
 
   runPlanCheck: safe(async ({ tools, userId, params }) => {
@@ -127,15 +161,19 @@ export const actions: Record<string, ActionHandler<Env>> = {
         }).join('')}
         <p style="color:#888;font-size:12px">Sent from TripHive by ${escapeHtml(names[userId]?.name ?? 'a member')}.</p>
       </div>`
-    const r = await tools.integration('email/send', {
-      to,
-      subject: `Itinerary: ${t.title} (${t.startDate})`,
-      html,
-      reply_to: names[userId]?.email,
-    })
-    if (!r.success) throw new TripError(`Email failed: ${r.error}`)
-    await logActivity(tools, tripId, userId, `emailed the itinerary to ${to.length} traveler(s)`)
-    return { sent: to.length }
+    // One email per traveler, so addresses are never disclosed to each other.
+    let sent = 0
+    for (const addr of to) {
+      const r = await tools.integration('email/send', {
+        to: addr,
+        subject: `Itinerary: ${t.title} (${t.startDate})`,
+        html,
+      })
+      if (r.success) sent++
+    }
+    if (sent === 0) throw new TripError('Email failed')
+    await logActivity(tools, tripId, userId, `emailed the itinerary to ${sent} traveler(s)`)
+    return { sent }
   }),
 
   /** Members list with display names (team_members rows only carry ids). */

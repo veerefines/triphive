@@ -298,7 +298,7 @@ export async function searchPlaces(tools: ActionTools, query: string, destinatio
 // Proposals + voting
 // ---------------------------------------------------------------------------
 
-function cleanStop(input: Partial<StopData>, partial: boolean): Partial<StopData> {
+export function cleanStop(input: Partial<StopData>, partial: boolean): Partial<StopData> {
   const out: Record<string, unknown> = {}
   for (const k of STOP_FIELDS) {
     const v = (input as Record<string, unknown>)[k]

@@ -59,6 +59,9 @@ function recordRoomStub(env: Env): DurableObjectStub {
 // blocks accidental DoS via megabyte payloads.
 const MAX_USER_CONTENT_LENGTH = 100_000
 
+/** Owner-billed AI: per-user daily message cap. */
+const HIVE_DAILY_TURNS = 40
+
 // Derive a chat title from the first user message — first non-empty line,
 // trimmed to ~50 chars with an ellipsis.
 function deriveTitle(content: string): string {
@@ -184,6 +187,22 @@ export function registerAiChatRoutes(
       )
     }
 
+    // TripHive: owner-billed, so cap turns per user per UTC day.
+    {
+      const privileged = createActionTools(c.env, auth.userId, jwt)
+      const mine = await privileged.query<{ role: string }>('ai-messages', {
+        where: { userId: auth.userId, role: 'user' },
+        orderBy: 'createdAt',
+        orderDir: 'desc',
+        limit: HIVE_DAILY_TURNS + 1,
+      })
+      const today = new Date().toISOString().slice(0, 10)
+      const used = mine.success ? mine.data.records.filter((r) => r.createdAt.slice(0, 10) === today).length : 0
+      if (used >= HIVE_DAILY_TURNS) {
+        return c.json({ error: `Hive's daily limit (${HIVE_DAILY_TURNS} messages) is reached — try again tomorrow.` }, 429)
+      }
+    }
+
     // TripHive: verify membership BEFORE any model call. The tripId comes from
     // the client, so it is only trusted after requireMember passes.
     let tripTools: ReturnType<typeof buildTripTools> | null = null
@@ -239,8 +258,11 @@ export function registerAiChatRoutes(
         ? { text: chat.compactedSummary, throughId: chat.compactedThroughId }
         : undefined
 
-    // User-billed: compaction is part of the user's chat experience, not infra.
-    const summarizer = makeDefaultSummarizer(c.env, { authToken: jwt })
+    // TripHive bills Hive to the app owner (omitting authToken → APP_OWNER_JWT):
+    // travelers sign in with fresh DeepSpace accounts that carry no credits,
+    // and a user-billed planner would 402 for every one of them. Only verified
+    // trip members reach this point, and HIVE_DAILY_TURNS caps spend per user.
+    const summarizer = makeDefaultSummarizer(c.env)
     const { messages: prepared, newSummary } = await prepareMessagesWithCompaction(
       turns,
       DEFAULT_CONTEXT_CONFIG,
@@ -375,7 +397,7 @@ export function registerAiChatRoutes(
     const { result } = streamDeepSpaceAgent(c.env, {
       profile: 'application',
       modelId: usedModelId,
-      authToken: jwt,
+      // Owner-billed — see the summarizer note above.
       instructions: systemText,
       messages,
       tools,

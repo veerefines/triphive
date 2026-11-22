@@ -36,7 +36,6 @@ export default function TripPage() {
   const { records: proposals } = useQuery<Proposal>('proposals', { where: { tripId } })
   const { records: activity } = useQuery<Activity>('activity', { where: { tripId } })
   const stopMut = useMutations<Stop>('stops')
-  const prefMut = useMutations<Pref>('prefs')
   const { peers, updateState } = usePresenceRoom(`trip:${tripId}`)
 
   const [side, setSide] = useState<SideTab>('hive')
@@ -108,8 +107,10 @@ export default function TripPage() {
   }
 
   async function saveStop(data: Partial<Stop>) {
+    // Edits are direct realtime writes ('team' RBAC); creation goes through a
+    // membership-checked action because RBAC `create` cannot be row-scoped.
     if (editing?.stop) await stopMut.put(editing.stop.recordId, data)
-    else await stopMut.create({ ...(data as Stop), tripId, source: 'human' })
+    else await callAction('addStop', { tripId, stop: data })
     scheduleRecheck()
   }
 
@@ -342,11 +343,9 @@ export default function TripPage() {
         onClose={() => setPrefsOpen(false)}
         existing={myPrefs}
         tripId={tripId}
-        ready={prefMut.ready}
-        onSave={async (data, recordId) => {
-          if (recordId) await prefMut.put(recordId, data)
-          else await prefMut.create(data as Pref)
-          scheduleRecheck()
+        ready
+        onSave={async (data) => {
+          await callAction('savePrefs', { tripId, prefs: data })
         }}
       />
       <ConfirmModal

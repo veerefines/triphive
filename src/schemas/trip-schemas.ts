@@ -7,11 +7,11 @@
  * written ONLY by server actions (createTrip / joinTrip), so a client can never
  * add itself to someone else's trip.
  *
- * Known limit of DeepSpace RBAC: `create` is a boolean, not row-scoped. A
- * signed-in member who guesses a trip id could insert a `stops`/`prefs` row
- * into it (they still can't READ anything from it). Collections where a forged
- * row would matter (proposals, issues, activity, trips, team_members) are
- * therefore `create: false` and written server-side only.
+ * DeepSpace RBAC `create` is a boolean, not row-scoped: `create: true` would
+ * let any signed-in user insert rows into a trip they are not on. So every
+ * collection here is `create: false`; rows are created by server actions that
+ * call `requireMember` first (addStop, savePrefs, …). Updates/deletes ARE
+ * row-scoped (`'team'` / `'own'`), so edits stay direct, realtime writes.
  */
 import type { CollectionSchema } from 'deepspace/schema'
 
@@ -88,7 +88,10 @@ export const stopsSchema: CollectionSchema = {
   ],
   teamField: 'tripId',
   permissions: {
-    member: { read: 'team', create: true, update: 'team', delete: 'team' },
+    member: { read: 'team', create: false, update: 'team', delete: 'team', writableFields: [
+      'date', 'start', 'end', 'title', 'notes', 'address', 'url', 'category',
+      'lat', 'lng', 'costPerPerson', 'outdoor', 'fixedTime',
+    ] },
     admin: ADMIN,
   },
 }
@@ -110,7 +113,9 @@ export const prefsSchema: CollectionSchema = {
   ownerField: 'userId',
   teamField: 'tripId',
   permissions: {
-    member: { read: 'team', create: true, update: 'own', delete: 'own' },
+    member: { read: 'team', create: false, update: 'own', delete: 'own', writableFields: [
+      'dailyBudget', 'pace', 'interests', 'dietary', 'wakeTime',
+    ] },
     admin: ADMIN,
   },
 }

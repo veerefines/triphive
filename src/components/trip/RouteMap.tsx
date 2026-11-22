@@ -53,9 +53,11 @@ export function RouteMap({ trip, stops, date }: { trip: Trip; stops: RecordData<
       })
       const ll: L.LatLngExpression = [s.lat as number, s.lng as number]
       pts.push(ll)
-      L.marker(ll, { icon })
-        .bindTooltip(`${s.start ?? ''} ${s.title}`.trim())
-        .addTo(g)
+      // Leaflet renders string tooltips as HTML — pass a text node so a stop
+      // title can never inject markup into other travelers' browsers.
+      const label = document.createElement('span')
+      label.textContent = `${s.start ?? ''} ${s.title}`.trim()
+      L.marker(ll, { icon }).bindTooltip(label).addTo(g)
     })
     if (pts.length > 1) L.polyline(pts, { color: '#d97706', weight: 3, dashArray: '6 6' }).addTo(g)
     if (pts.length) m.fitBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: 15 })

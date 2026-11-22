@@ -85,7 +85,7 @@ I directed a coding agent (Claude Code) through the whole build.
 - owner-billed AI being reachable by non-members
 - a spend cap that users could delete. It is now a server-only counter that fails closed.
 
-**Known residual:** two exactly simultaneous Hive requests from one user can both pass the cap check, so the cap can be exceeded by 1–2 messages. A per-user Durable Object counter would close this.
+**Known residual:** the per-user caps (Hive messages, Google lookups) are read-then-write on a server-only counter, so exactly simultaneous requests from one user can overshoot by the number in flight. A per-user Durable Object counter with an atomic increment would close this.
 
 **Automated verification:**
 - `npx vitest run src/lib`: 18 Plan Doctor and geo unit tests.

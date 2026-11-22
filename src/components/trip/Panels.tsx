@@ -3,6 +3,7 @@ import type { RecordData } from 'deepspace'
 import { AlertTriangle, ArrowRight, Check, ExternalLink, Minus, Plus, ThumbsDown, ThumbsUp, Wand2 } from 'lucide-react'
 import { Badge, Button, Input, Label, Modal, cn, useToast } from '@/components/ui'
 import { callAction } from '@/lib/api'
+import { safeHref } from '@/lib/safeUrl'
 import type { Activity, IssueRow, Member, Pref, Proposal, Stop } from './types'
 
 type NameOf = (userId: string) => string
@@ -143,7 +144,7 @@ export function ProposalsPanel({
             <p className="mt-1.5 text-xs text-muted-foreground">{p.data.reason}</p>
             {p.data.sources?.length > 0 && (
               <div className="mt-1.5 flex flex-wrap gap-2">
-                {p.data.sources.map((u) => (
+                {p.data.sources.filter((u) => safeHref(u)).map((u) => (
                   <a key={u} href={u} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
                     <ExternalLink className="size-3" />
                     {new URL(u).hostname.replace(/^www\./, '')}

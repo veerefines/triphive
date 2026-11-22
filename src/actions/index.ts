@@ -25,6 +25,7 @@ import {
   type StopData,
 } from '../server/trips'
 import { groupByDate } from '../lib/planCheck'
+import { safeHref } from '../lib/safeUrl'
 
 /** Map thrown TripErrors to `{ success: false }`; let real bugs surface as 500. */
 function safe(fn: (ctx: ActionContext<Env>) => Promise<unknown>): ActionHandler<Env> {
@@ -159,7 +160,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
         ${days.map(([date, list]) => {
           const fc = t.forecast?.[date]
           return `<h3 style="margin-bottom:4px">${date}${fc ? ` <small style="color:#888">· ${fc.min}–${fc.max}°C ${escapeHtml(fc.desc)}</small>` : ''}</h3>
-            <ul style="padding-left:18px;margin-top:0">${list.map((s) => `<li><b>${s.start ?? '—'}${s.end ? `–${s.end}` : ''}</b> ${escapeHtml(s.title)}${s.address ? ` <span style="color:#888">· ${escapeHtml(s.address.split(',').slice(0, 2).join(','))}</span>` : ''}${s.url ? ` · <a href="${escapeHtml(s.url)}">link</a>` : ''}</li>`).join('')}</ul>`
+            <ul style="padding-left:18px;margin-top:0">${list.map((s) => `<li><b>${s.start ?? '—'}${s.end ? `–${s.end}` : ''}</b> ${escapeHtml(s.title)}${s.address ? ` <span style="color:#888">· ${escapeHtml(s.address.split(',').slice(0, 2).join(','))}</span>` : ''}${safeHref(s.url) ? ` · <a href="${escapeHtml(safeHref(s.url)!)}">link</a>` : ''}</li>`).join('')}</ul>`
         }).join('')}
         <p style="color:#888;font-size:12px">Sent from TripHive by ${escapeHtml(names[userId]?.name ?? 'a member')}.</p>
       </div>`

@@ -7,6 +7,7 @@ import { createContext, useContext, useState } from 'react'
 import { Check, ExternalLink, MapPin, Navigation, Plus, Star } from 'lucide-react'
 import { cn, useToast } from '@/components/ui'
 import { callAction } from '@/lib/api'
+import { safeHref } from '@/lib/safeUrl'
 import { CATEGORY_META } from './types'
 
 export type SuggestedPlace = {
@@ -70,7 +71,7 @@ function PlaceCard({ place: p, ctx }: { place: SuggestedPlace; ctx: TripChatCont
           address: p.address,
           lat: p.lat,
           lng: p.lng,
-          url: p.mapsUrl ?? p.sourceUrl,
+          url: safeHref(p.mapsUrl) ?? safeHref(p.sourceUrl),
           costPerPerson: p.costPerPerson,
           outdoor: !!p.outdoor,
           rating: p.rating,
@@ -143,7 +144,7 @@ function PlaceCard({ place: p, ctx }: { place: SuggestedPlace; ctx: TripChatCont
           {state === 'added' ? 'Added' : state === 'adding' ? 'Adding…' : 'Add'}
         </button>
         <a
-          href={p.mapsUrl ?? mapsSearchUrl(p)}
+          href={safeHref(p.mapsUrl) ?? mapsSearchUrl(p)}
           target="_blank"
           rel="noreferrer"
           aria-label={`${p.name} on Google Maps`}
@@ -151,9 +152,9 @@ function PlaceCard({ place: p, ctx }: { place: SuggestedPlace; ctx: TripChatCont
         >
           <Navigation className="size-3.5" />
         </a>
-        {p.sourceUrl && (
+        {safeHref(p.sourceUrl) && (
           <a
-            href={p.sourceUrl}
+            href={safeHref(p.sourceUrl)}
             target="_blank"
             rel="noreferrer"
             aria-label="Source"

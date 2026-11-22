@@ -384,6 +384,15 @@ export function cleanStop(input: Partial<StopData>, partial: boolean): Partial<S
     if (out[k] !== undefined && out[k] !== '' && !HHMM.test(String(out[k]))) throw new TripError(`Bad ${k} "${out[k]}" (HH:MM)`)
   }
   if (!partial && (!out.title || !out.date)) throw new TripError('A new stop needs a title and a date')
+  if (out.url !== undefined && out.url !== '') {
+    try {
+      const u = new URL(String(out.url))
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error()
+      out.url = u.toString()
+    } catch {
+      delete out.url // never persist non-http(s) links
+    }
+  }
   if (typeof out.title === 'string') out.title = out.title.slice(0, 120)
   if (typeof out.notes === 'string') out.notes = out.notes.slice(0, 1000)
   return out as Partial<StopData>

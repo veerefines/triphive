@@ -29,6 +29,7 @@ import {
 
 const HHMM = z.string().regex(/^([01]?\d|2[0-3]):[0-5]\d$/, 'HH:MM 24h')
 const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD')
+const HTTP_URL = z.string().url().refine((u) => /^https?:$/.test(new URL(u).protocol), 'http(s) only')
 
 const stopFields = {
   date: YMD,
@@ -37,7 +38,7 @@ const stopFields = {
   title: z.string().min(1).max(120),
   notes: z.string().max(1000).optional(),
   address: z.string().max(300).optional(),
-  url: z.string().url().optional(),
+  url: HTTP_URL.optional(),
   category: z.enum(['food', 'sight', 'activity', 'stay', 'transport', 'other']).optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
@@ -138,7 +139,7 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
               end: HHMM.optional(),
               costPerPerson: z.number().min(0).optional().describe('USD estimate'),
               outdoor: z.boolean().optional(),
-              sourceUrl: z.string().url().optional(),
+              sourceUrl: HTTP_URL.optional(),
             }),
           )
           .min(1)

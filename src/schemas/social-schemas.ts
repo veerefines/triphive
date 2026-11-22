@@ -104,6 +104,8 @@ export const tripMessagesSchema: CollectionSchema = {
     { name: 'tripId', storage: 'text', interpretation: 'plain', required: true },
     { name: 'senderId', storage: 'text', interpretation: 'plain', required: true },
     { name: 'text', storage: 'text', interpretation: 'plain', required: true },
+    // Hive place cards attached to a Hive message (senderId 'hive').
+    { name: 'cards', storage: 'text', interpretation: { kind: 'json' } },
   ],
   teamField: 'tripId',
   permissions: {
@@ -112,7 +114,27 @@ export const tripMessagesSchema: CollectionSchema = {
   },
 }
 
+/** TripHiver reviews of places, shared across trips (keyed by src/lib/reviews placeKey). */
+export const placeReviewsSchema: CollectionSchema = {
+  name: 'place_reviews',
+  columns: [
+    { name: 'placeKey', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'name', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'city', storage: 'text', interpretation: 'plain' },
+    { name: 'userId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'tripId', storage: 'text', interpretation: 'plain' },
+    { name: 'rating', storage: 'number', interpretation: 'plain', required: true },
+    { name: 'text', storage: 'text', interpretation: 'plain' },
+    { name: 'spentUsd', storage: 'number', interpretation: 'plain' },
+  ],
+  permissions: {
+    member: { read: true, ...SERVER_ONLY },
+    admin: ADMIN,
+  },
+}
+
 export const socialSchemas: CollectionSchema[] = [
+  placeReviewsSchema,
   profilesSchema,
   publicTripsSchema,
   joinRequestsSchema,

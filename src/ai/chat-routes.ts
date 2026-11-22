@@ -39,6 +39,7 @@ import { buildSystemPrompt } from './tools.js'
 import { buildTripTools, tripSystemPrompt } from './trip-tools.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, requireMember } from '../server/trips.js'
+import { registerHiveGroupRoute, reserveHiveTurn } from './hive-group.js'
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
 import type { Env, AppContext } from '../../worker.js'
@@ -59,8 +60,6 @@ function recordRoomStub(env: Env): DurableObjectStub {
 // blocks accidental DoS via megabyte payloads.
 const MAX_USER_CONTENT_LENGTH = 100_000
 
-/** Owner-billed AI: per-user daily message cap. */
-const HIVE_DAILY_TURNS = 40
 /** Models allowed for owner-billed trip chats; first is the default. */
 export const HIVE_MODELS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
 
@@ -93,6 +92,8 @@ export function registerAiChatRoutes(
           : 'Temporarily unavailable'
     return c.json({ error }, access.status)
   }
+
+  registerHiveGroupRoute(app, requireAccess)
 
   // Create a new chat row owned by the caller.
   app.post('/api/ai/chats', async (c) => {
@@ -208,21 +209,9 @@ export function registerAiChatRoutes(
       tripTools = buildTripTools(privileged, tripId, auth.userId, c.env.GOOGLE_MAPS_API_KEY)
 
       // Owner-billed → reserve one turn in the server-only ai_usage counter
-      // BEFORE the model call. Users cannot read or delete it; any failure to
-      // reserve fails closed. (Two truly simultaneous requests can both pass
-      // the read — bounded overshoot of 1–2 turns, accepted.)
-      const day = new Date().toISOString().slice(0, 10)
-      const usage = await privileged.query<{ count: number }>('ai_usage', { where: { userId: auth.userId, day }, limit: 1 })
-      if (!usage.success) return c.json({ error: 'Usage check failed, try again' }, 503)
-      const row = usage.data.records[0]
-      const used = Number(row?.data.count ?? 0)
-      if (used >= HIVE_DAILY_TURNS) {
-        return c.json({ error: `Hive's daily limit (${HIVE_DAILY_TURNS} messages) is reached — try again tomorrow.` }, 429)
-      }
-      const reserved = row
-        ? await privileged.update('ai_usage', row.recordId, { count: used + 1 })
-        : await privileged.create('ai_usage', { userId: auth.userId, day, count: 1 })
-      if (!reserved.success) return c.json({ error: 'Usage check failed, try again' }, 503)
+      // BEFORE the model call (see reserveHiveTurn). Fails closed.
+      const reserve = await reserveHiveTurn(privileged, auth.userId)
+      if (!reserve.ok) return c.json({ error: reserve.error }, reserve.status)
     }
     // Owner pays ONLY for verified trip chats; anything else is user-billed.
     const billingToken = tripTools ? undefined : jwt

@@ -32,6 +32,7 @@ import {
   respondToRequest,
   saveProfile,
   sendDm,
+  reviewPlace,
   sendTripMessage,
   setVisibility,
   suggestStop,
@@ -214,4 +215,5 @@ export const actions: Record<string, ActionHandler<Env>> = {
   sendDm: safe(({ tools, userId, params }) => sendDm(tools, userId, params)),
   sendTripMessage: safe(({ tools, userId, params }) => sendTripMessage(tools, userId, params)),
   suggestStop: safe(({ tools, userId, params }) => suggestStop(tools, userId, params)),
+  reviewPlace: safe(({ tools, userId, params }) => reviewPlace(tools, userId, params)),
 }

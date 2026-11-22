@@ -102,6 +102,12 @@ test('public trip → request → accept → chat → suggest', async ({ users }
   await a.page.getByRole('button', { name: /^Chat/ }).click()
   await expect(a.page.getByTestId('group-msg').filter({ hasText: 'Hello group' })).toBeVisible({ timeout: 20_000 })
 
+  // 7. Trip cost: per-person estimate in EUR with a cash suggestion.
+  await a.page.getByRole('button', { name: /^Cost/ }).click()
+  const budget = a.page.getByTestId('trip-budget')
+  await expect(budget).toContainText('€')
+  await expect(budget).toContainText(/Carry about/)
+
   // Cleanup.
   await a.page.goto('/trips')
   await a.page.getByRole('button', { name: `Delete ${title}` }).click()

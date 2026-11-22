@@ -11,6 +11,10 @@ import { FeaturedCard, PersonAvatar, PublicTripCard, VIBES, VIBE_EMOJI, type Lis
 import { featuredNear } from '@/data/featured'
 import { callAction } from '@/lib/api'
 import { matchLabel, matchTrips } from '@/lib/match'
+import { getAuthToken } from 'deepspace'
+import type { PlaceCard } from '@/ai/hive-group'
+import { HiveCard } from './HiveCard'
+import type { TripMoney } from './useTripMoney'
 import type { Trip } from './types'
 
 export function VisibilityChip({ visibility, isOwner, onClick }: { visibility?: string; isOwner: boolean; onClick: () => void }) {
@@ -134,17 +138,46 @@ export function VisibilityModal({ open, onClose, tripId, trip }: { open: boolean
   )
 }
 
-type TripMsg = { tripId: string; senderId: string; text: string }
+type TripMsg = { tripId: string; senderId: string; text: string; cards?: PlaceCard[] }
 
-export function GroupChat({ tripId, me, nameOf }: { tripId: string; me: string; nameOf: (uid: string) => string }) {
+const HIVE = 'hive'
+const HIVE_WAIT_MS = 45_000
+
+interface GroupChatProps {
+  tripId: string
+  me: string
+  nameOf: (uid: string) => string
+  dates: string[]
+  labelFor: (date: string) => string
+  money: TripMoney
+}
+
+/** Ask Hive to read the chat. It replies into trip_messages, so the live query shows it. */
+async function pingHive(tripId: string): Promise<{ accepted?: boolean; error?: string }> {
+  const token = await getAuthToken()
+  const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/hive-chat`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+  const body = (await res.json().catch(() => ({}))) as { accepted?: boolean; error?: string }
+  return res.ok ? body : { error: body.error ?? `Hive unavailable (${res.status})` }
+}
+
+export function GroupChat({ tripId, me, nameOf, dates, labelFor, money }: GroupChatProps) {
   const toast = useToast()
   const { records } = useQuery<TripMsg>('trip_messages', { where: { tripId } })
   const [text, setText] = useState('')
+  const [hiveSince, setHiveSince] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const msgs = [...records].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const lastHiveAt = [...msgs].reverse().find((m) => m.data.senderId === HIVE)?.createdAt
+  const isHiveThinking = !!hiveSince && !(lastHiveAt && lastHiveAt > hiveSince)
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
-  }, [msgs.length])
+  }, [msgs.length, isHiveThinking])
+  useEffect(() => {
+    if (!hiveSince) return
+    // Hive answers NOOP silently; stop the indicator after a while.
+    const t = setTimeout(() => setHiveSince(null), HIVE_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [hiveSince])
 
   async function send(e: FormEvent) {
     e.preventDefault()
@@ -153,6 +186,13 @@ export function GroupChat({ tripId, me, nameOf }: { tripId: string; me: string; 
     setText('')
     try {
       await callAction('sendTripMessage', { tripId, text: body })
+      const since = new Date().toISOString()
+      pingHive(tripId)
+        .then((r) => {
+          if (r.accepted) setHiveSince(since)
+          else if (r.error) toast.error('Hive is resting', r.error)
+        })
+        .catch(() => undefined)
     } catch (err) {
       setText(body)
       toast.error('Not sent', (err as Error).message)
@@ -166,24 +206,37 @@ export function GroupChat({ tripId, me, nameOf }: { tripId: string; me: string; 
           <div className="py-10 text-center">
             <p className="text-3xl">💬</p>
             <p className="mt-1 font-semibold">Group chat</p>
-            <p className="text-sm text-muted-foreground">Say hi to everyone on the trip.</p>
+            <p className="text-sm text-muted-foreground">Say hi to everyone on the trip. 🐝 Hive listens in: agree on a place and it lands in the plan.</p>
           </div>
         )}
         {msgs.map((m, i) => {
+          const isHive = m.data.senderId === HIVE
           const mine = m.data.senderId === me
           const showName = !mine && msgs[i - 1]?.data.senderId !== m.data.senderId
+          const avatar = isHive ? (
+            <span className={cn('flex size-[26px] shrink-0 items-center justify-center rounded-full bg-honey/25 text-sm', !showName && 'invisible')}>🐝</span>
+          ) : (
+            <PersonAvatar uid={m.data.senderId} size={26} className={showName ? '' : 'invisible'} />
+          )
           return (
             <div key={m.recordId} className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>
-              {!mine && <PersonAvatar uid={m.data.senderId} size={26} className={showName ? '' : 'invisible'} />}
+              {!mine && avatar}
               <div className="max-w-[78%]">
-                {showName && <p className="mb-0.5 ml-1 text-[11px] text-muted-foreground">{nameOf(m.data.senderId)}</p>}
-                <p data-testid="group-msg" className={cn('whitespace-pre-wrap rounded-3xl px-3.5 py-2 text-sm', mine ? 'rounded-br-md bg-foreground text-background' : 'rounded-bl-md bg-muted')}>
+                {showName && <p className="mb-0.5 ml-1 text-[11px] text-muted-foreground">{isHive ? 'Hive' : nameOf(m.data.senderId)}</p>}
+                <p data-testid="group-msg" className={cn('whitespace-pre-wrap rounded-3xl px-3.5 py-2 text-sm', mine ? 'rounded-br-md bg-foreground text-background' : isHive ? 'rounded-bl-md bg-honey/15' : 'rounded-bl-md bg-muted')}>
                   {m.data.text}
                 </p>
+                {isHive && (m.data.cards ?? []).map((c) => <HiveCard key={c.name} card={c} tripId={tripId} dates={dates} labelFor={labelFor} money={money} />)}
               </div>
             </div>
           )
         })}
+        {isHiveThinking && (
+          <p data-testid="hive-thinking" className="anim-in flex items-center gap-2 pl-1 text-xs text-muted-foreground">
+            <span className="flex size-[26px] items-center justify-center rounded-full bg-honey/25 text-sm">🐝</span>
+            <span className="animate-pulse">Hive is reading the chat…</span>
+          </p>
+        )}
         <div ref={endRef} />
       </div>
       <form onSubmit={send} className="flex items-center gap-2 border-t border-border p-2.5">

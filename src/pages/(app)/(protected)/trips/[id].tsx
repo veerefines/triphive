@@ -8,12 +8,14 @@ import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
 import { ActivityFeed, IssuesPanel, PrefsModal, ProposalsPanel } from '@/components/trip/Panels'
 import { RouteMap } from '@/components/trip/RouteMap'
 import { TripChatContext } from '@/components/trip/PlaceCards'
+import { TripBudget } from '@/components/trip/TripBudget'
 import { ExplorePanel, GroupChat, VisibilityChip, VisibilityModal } from '@/components/trip/Social'
 import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/components/trip/types'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
+import { useTripMoney } from '@/components/trip/useTripMoney'
 
-type SideTab = 'hive' | 'chat' | 'proposals' | 'issues' | 'explore'
+type SideTab = 'hive' | 'chat' | 'proposals' | 'issues' | 'budget' | 'explore'
 
 // Mirrors HIVE_MODELS in src/ai/chat-routes.ts (the server enforces it).
 const HIVE_MODEL_IDS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
@@ -46,6 +48,9 @@ export default function TripPage() {
   const { records: activity } = useQuery<Activity>('activity', { where: { tripId } })
   const stopMut = useMutations<Stop>('stops')
   const { peers, updateState } = usePresenceRoom(`trip:${tripId}`)
+  const { records: myProfiles } = useQuery<{ userId: string; homeCity?: string }>('profiles', { where: { userId: userId ?? '' } })
+  const prefRows = useMemo(() => prefs.map((p) => p.data), [prefs])
+  const money = useTripMoney(trip?.data, prefRows, members.length, myProfiles[0]?.data.homeCity)
 
   const [side, setSide] = useState<SideTab>('hive')
   const [mapDate, setMapDate] = useState<string>('')
@@ -347,6 +352,7 @@ export default function TripPage() {
               activeStopId={activeStopId}
               onPinClick={focusStop}
               onPinHover={setActiveStopId}
+              money={money}
             />
           )}
         </section>
@@ -365,6 +371,7 @@ export default function TripPage() {
                 ['chat', 'Chat', null],
                 ['proposals', 'Votes', pendingCount],
                 ['issues', 'Issues', issues.length],
+                ['budget', 'Cost', null],
                 ['explore', 'Explore', null],
               ] as const
             ).map(([key, label, count]) => (
@@ -429,7 +436,8 @@ export default function TripPage() {
                 }}
               />
             )}
-            {side === 'chat' && <GroupChat tripId={tripId} me={userId ?? ''} nameOf={nameOf} />}
+            {side === 'chat' && <GroupChat tripId={tripId} me={userId ?? ''} nameOf={nameOf} dates={dates} labelFor={(d) => `Day ${dates.indexOf(d) + 1} · ${weekday(d, { weekday: 'short', month: 'short', day: 'numeric' })}`} money={money} />}
+            {side === 'budget' && <TripBudget trip={t} stops={stops} dates={dates} money={money} homeCity={myProfiles[0]?.data.homeCity} />}
             {side === 'explore' && (
               <>
                 <ExplorePanel

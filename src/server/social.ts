@@ -4,6 +4,7 @@
  * checks the caller's relationship to the row (owner / requester / member).
  */
 import type { ActionTools } from 'deepspace/worker'
+import { cityOf, placeKey, type PlaceReviewData } from '../lib/reviews'
 import { TripError, createProposal, getTrip, listMembers, logActivity, requireMember, userNames, type StopData, type TripData } from './trips'
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -249,6 +250,41 @@ export async function suggestStop(tools: ActionTools, userId: string, params: Re
     reason: str(params.reason, 500) || `Suggested by ${names[userId]?.name ?? 'a traveler'}.`,
     sources: typeof stop.url === 'string' ? [stop.url] : [],
   })
+}
+
+const MAX_REVIEW_SPEND_USD = 10_000
+
+/**
+ * A member rates a place on their trip. One review per user per place: a
+ * second review replaces the first. Reviews are public to signed-in users so
+ * other TripHivers see them when adding the same place.
+ */
+export async function reviewPlace(tools: ActionTools, userId: string, params: Record<string, unknown>) {
+  const tripId = str(params.tripId, 80)
+  await requireMember(tools, tripId, userId)
+  const trip = await getTrip(tools, tripId)
+  if (!trip) throw new TripError('Trip not found')
+  const name = str(params.name, 120)
+  if (!name) throw new TripError('Which place?')
+  const rating = Math.round(Number(params.rating))
+  if (!(rating >= 1 && rating <= 5)) throw new TripError('Rating must be 1–5 stars')
+  const spent = Number(params.spentUsd)
+  const data = {
+    placeKey: placeKey(name, trip.data.destination),
+    name,
+    city: cityOf(trip.data.destination),
+    userId,
+    tripId,
+    rating,
+    text: str(params.text, 600) || undefined,
+    spentUsd: Number.isFinite(spent) && spent >= 0 && spent <= MAX_REVIEW_SPEND_USD ? Math.round(spent) : undefined,
+  }
+  const prior = await tools.query<PlaceReviewData & Record<string, unknown>>('place_reviews', { where: { placeKey: data.placeKey, userId }, limit: 1 })
+  const existing = prior.success ? prior.data.records[0] : undefined
+  if (existing) ok(await tools.update('place_reviews', existing.recordId, data), 'update review')
+  else ok(await tools.create('place_reviews', data), 'save review')
+  await logActivity(tools, tripId, userId, `rated ${name} ${'★'.repeat(rating)}`)
+  return { saved: true, placeKey: data.placeKey }
 }
 
 /** Remove social rows tied to a trip (called by deleteTrip). */

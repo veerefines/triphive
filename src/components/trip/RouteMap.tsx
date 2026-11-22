@@ -1,15 +1,19 @@
 /**
  * Day route map — Leaflet + OpenStreetMap tiles (no API key). Numbered pins in
- * visit order and a dashed route line; distances are the same approximations
- * Plan Doctor uses (see src/lib/geo.ts).
+ * visit order, each hop drawn on real streets (OSRM) and coloured by the best
+ * way to get there, plus a strip of legs with walk / transit / taxi options
+ * priced in the destination currency (see useDayRoutes + src/lib/legs.ts).
  */
 import { useEffect, useMemo, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RecordData } from 'deepspace'
-import { googleDirectionsUrl, hasCoords, totalKm } from '@/lib/geo'
+import { googleDirectionsUrl, hasCoords } from '@/lib/geo'
 import { sortDay } from '@/lib/planCheck'
 import { CATEGORY_META, type Stop, type Trip } from './types'
+import { useDayRoutes, type DayStopPoint } from './useDayRoutes'
+import type { TripMoney } from './useTripMoney'
+import { LegsStrip, MODE_STYLE } from './LegsStrip'
 
 export function RouteMap({
   trip,
@@ -19,7 +23,9 @@ export function RouteMap({
   activeStopId,
   onPinClick,
   onPinHover,
+  money,
 }: {
+  money: TripMoney
   trip: Trip
   stops: RecordData<Stop>[]
   date: string
@@ -38,6 +44,16 @@ export function RouteMap({
     [stops, date],
   )
   const located = useMemo(() => ordered.filter(hasCoords), [ordered])
+  const points = useMemo<DayStopPoint[]>(
+    () => located.map((s) => ({ id: s.id, title: s.title, lat: s.lat as number, lng: s.lng as number, start: s.start })),
+    [located],
+  )
+  const rainy = !!trip.forecast?.[date]?.rain
+  const legs = useDayRoutes(points, money, rainy)
+  const totals = useMemo(
+    () => legs.reduce((t, l) => ({ km: t.km + l.best.km, min: t.min + l.best.minutes, usd: t.usd + l.best.usd }), { km: 0, min: 0, usd: 0 }),
+    [legs],
+  )
 
   useEffect(() => {
     if (!el.current || map.current) return
@@ -90,7 +106,19 @@ export function RouteMap({
       marker.addTo(g)
       if (isActive) marker.openTooltip()
     })
-    if (pts.length > 1) L.polyline(pts, { color: '#1c1814', weight: 3, opacity: 0.7, dashArray: '2 8', lineCap: 'round' }).addTo(g)
+    legs.forEach((leg) => {
+      const style = MODE_STYLE[leg.best.mode]
+      const hot = leg.toId === activeStopId || leg.fromId === activeStopId
+      L.polyline(leg.path, { color: '#fff', weight: hot ? 9 : 7, opacity: 0.9, lineCap: 'round', lineJoin: 'round' }).addTo(g)
+      L.polyline(leg.path, {
+        color: style.color,
+        weight: hot ? 5 : 4,
+        opacity: leg.isRouted ? 0.95 : 0.6,
+        dashArray: style.dash ?? (leg.isRouted ? undefined : '2 8'),
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(g)
+    })
     const nextBounds = pts.length ? L.latLngBounds(pts) : null
     const sameBounds = !!nextBounds && !!bounds.current && nextBounds.equals(bounds.current)
     bounds.current = nextBounds
@@ -104,7 +132,7 @@ export function RouteMap({
     }
     else if (typeof trip.lat === 'number' && typeof trip.lng === 'number') m.setView([trip.lat, trip.lng], 12)
     else m.setView([20, 0], 2)
-  }, [located, ordered, trip.lat, trip.lng, activeStopId, onPinClick, onPinHover])
+  }, [located, ordered, legs, trip.lat, trip.lng, activeStopId, onPinClick, onPinHover])
 
   return (
     <div className="relative isolate z-0 h-full min-h-[360px] overflow-hidden rounded-3xl border border-border">
@@ -112,12 +140,17 @@ export function RouteMap({
       <div className="pointer-events-none absolute left-3 top-3 z-[500] max-w-[55%] rounded-2xl bg-card/95 px-3.5 py-2 shadow-[var(--shadow-card-hover)] backdrop-blur">
         <p className="truncate text-sm font-semibold">{label}</p>
         <p className="text-[11px] text-muted-foreground">
-          {located.length} pinned · {totalKm(ordered)} km · approx route
+          {located.length} pinned
+          {legs.length > 0 && (
+            <>
+              {' '}· {totals.km.toFixed(1)} km · {totals.min} min moving · {totals.usd > 0 ? `${money.local(totals.usd)} pp` : 'free'}
+            </>
+          )}
         </p>
       </div>
       {located.length > 1 && (
         <a
-          href={googleDirectionsUrl(located as Array<{ lat: number; lng: number }>, totalKm(ordered) > 4 ? 'transit' : 'walk') ?? '#'}
+          href={googleDirectionsUrl(points, legs.some((l) => l.best.mode !== 'walk') ? 'transit' : 'walk') ?? '#'}
           target="_blank"
           rel="noreferrer"
           className="absolute right-3 top-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-foreground px-3.5 py-2 text-xs font-semibold text-background shadow-lg hover:opacity-90"
@@ -125,8 +158,9 @@ export function RouteMap({
           <span className="hidden sm:inline">Open day in&nbsp;</span>Google Maps ↗
         </a>
       )}
+      {legs.length > 0 && <LegsStrip legs={legs} points={points} money={money} activeStopId={activeStopId} onFocus={onPinClick} />}
       {ordered.length > located.length && (
-        <p className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-full bg-card/95 px-3 py-1 text-[11px] text-warning shadow">
+        <p className="pointer-events-none absolute left-3 top-[4.5rem] z-[500] rounded-full bg-card/95 px-3 py-1 text-[11px] text-warning shadow">
           {ordered.length - located.length} stop(s) not on the map yet
         </p>
       )}

@@ -29,6 +29,8 @@ export type Stop = {
   outdoor?: boolean | number
   fixedTime?: boolean | number
   source?: 'human' | 'ai'
+  rating?: number
+  ratingCount?: number
 }
 
 export type Pref = {

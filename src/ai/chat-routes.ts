@@ -205,7 +205,7 @@ export function registerAiChatRoutes(
         if (err instanceof TripError) return c.json({ error: err.message }, 403)
         throw err
       }
-      tripTools = buildTripTools(privileged, tripId, auth.userId)
+      tripTools = buildTripTools(privileged, tripId, auth.userId, c.env.GOOGLE_MAPS_API_KEY)
 
       // Owner-billed → reserve one turn in the server-only ai_usage counter
       // BEFORE the model call. Users cannot read or delete it; any failure to

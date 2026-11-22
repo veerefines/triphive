@@ -7,6 +7,7 @@ import { ChatPanel } from '@/components/ChatPanel'
 import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
 import { ActivityFeed, IssuesPanel, PrefsModal, ProposalsPanel } from '@/components/trip/Panels'
 import { RouteMap } from '@/components/trip/RouteMap'
+import { TripChatContext } from '@/components/trip/PlaceCards'
 import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/components/trip/types'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
@@ -312,6 +313,9 @@ export default function TripPage() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className={cn('h-full', side !== 'hive' && 'hidden')}>
               {userId && (
+                <TripChatContext.Provider
+                  value={{ tripId, dates, labelFor: (d) => `Day ${dates.indexOf(d) + 1} · ${weekday(d, { weekday: 'short', month: 'short', day: 'numeric' })}` }}
+                >
                 <ChatPanel
                   key={tripId}
                   chatId={chatId}
@@ -336,6 +340,7 @@ export default function TripPage() {
                     </div>
                   }
                 />
+                </TripChatContext.Provider>
               )}
             </div>
             {side === 'proposals' && <ProposalsPanel proposals={proposals} stops={stops} members={members} me={userId ?? ''} isOwner={isOwner} nameOf={nameOf} />}

@@ -10,7 +10,7 @@ import {
   TripError,
   cleanStop,
   createTrip,
-  geocodePlace,
+  findPlaces,
   getTrip,
   joinTrip,
   listMembers,
@@ -63,7 +63,9 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const tripId = str(params.tripId)
     await requireMember(tools, tripId, userId)
     const stop = cleanStop((params.stop ?? {}) as Partial<StopData>, false)
-    const r = await tools.create('stops', { ...stop, tripId, source: 'human' })
+    // `fromHive`: a human clicked "Add" on a place Hive suggested — still a
+    // human decision, but credit the source on the card.
+    const r = await tools.create('stops', { ...stop, tripId, source: params.fromHive === true ? 'ai' : 'human' })
     if (!r.success) throw new TripError(r.error)
     return { stopId: r.data.recordId }
   }),
@@ -107,14 +109,12 @@ export const actions: Record<string, ActionHandler<Env>> = {
   }),
 
   /** Place autocomplete for the add-stop form (OSM Nominatim, biased to trip). */
-  findPlace: safe(async ({ tools, userId, params }) => {
+  findPlace: safe(async ({ tools, userId, params, env }) => {
     const tripId = str(params.tripId)
     const { trip } = await requireMember(tools, tripId, userId)
     const query = str(params.query).trim().slice(0, 120)
     if (query.length < 2) return { places: [] }
-    let places = await geocodePlace(query, trip.data)
-    if (places.length === 0) places = await geocodePlace(`${query}, ${trip.data.destination}`)
-    return { places }
+    return { places: await findPlaces(env.GOOGLE_MAPS_API_KEY, query, trip.data, 4) }
   }),
 
   vote: safe(({ tools, userId, params }) =>

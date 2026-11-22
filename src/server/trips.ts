@@ -8,6 +8,7 @@
  * `requireMember` before reading or writing anything for the caller.
  */
 import type { ActionTools } from 'deepspace/worker'
+import { googlePlacesSearch } from './google'
 import { checkPlan, summarizeForecast, tripDates, type DayForecast, type Issue, type PrefLike, type StopLike } from '../lib/planCheck'
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,8 @@ export type StopData = {
   outdoor?: boolean | number
   fixedTime?: boolean | number
   source?: 'human' | 'ai'
+  rating?: number
+  ratingCount?: number
 }
 
 export type ProposalData = {
@@ -62,7 +65,7 @@ export class TripError extends Error {}
 
 const STOP_FIELDS = [
   'date', 'start', 'end', 'title', 'notes', 'address', 'url', 'category',
-  'lat', 'lng', 'costPerPerson', 'outdoor', 'fixedTime',
+  'lat', 'lng', 'costPerPerson', 'outdoor', 'fixedTime', 'rating', 'ratingCount',
 ] as const
 
 const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/
@@ -236,6 +239,11 @@ export interface PlaceHit {
   lat: number
   lng: number
   kind: string
+  rating?: number
+  ratingCount?: number
+  mapsUrl?: string
+  openNow?: boolean
+  source?: 'google' | 'osm'
 }
 
 /**
@@ -264,6 +272,24 @@ export async function geocodePlace(query: string, near?: { lat?: number; lng?: n
     lng: Number(r.lon),
     kind: r.type ?? '',
   }))
+}
+
+/**
+ * Best available place lookup: Google Places (ratings, Maps link) when the
+ * owner configured GOOGLE_MAPS_API_KEY, otherwise OpenStreetMap — first
+ * biased to the trip area, then with the destination appended.
+ */
+export async function findPlaces(
+  googleKey: string | undefined,
+  query: string,
+  trip: { lat?: number; lng?: number; destination: string },
+  limit = 3,
+): Promise<PlaceHit[]> {
+  const g = await googlePlacesSearch(googleKey, `${query}, ${trip.destination}`, trip, limit).catch(() => null)
+  if (g && g.length) return g.map((p) => ({ ...p, kind: p.kind ?? '', source: 'google' as const }))
+  let hits = await geocodePlace(query, trip, limit).catch(() => [])
+  if (!hits.length) hits = await geocodePlace(`${query}, ${trip.destination}`, undefined, limit).catch(() => [])
+  return hits.map((h) => ({ ...h, source: 'osm' as const }))
 }
 
 export async function refreshWeather(tools: ActionTools, tripId: string) {

@@ -85,12 +85,14 @@ export const stopsSchema: CollectionSchema = {
     { name: 'outdoor', storage: 'number', interpretation: { kind: 'boolean' } },
     { name: 'fixedTime', storage: 'number', interpretation: { kind: 'boolean' } },
     { name: 'source', storage: 'text', interpretation: { kind: 'select', options: ['human', 'ai'] } },
+    { name: 'rating', storage: 'number', interpretation: 'plain' }, // Google rating (0–5) when known
+    { name: 'ratingCount', storage: 'number', interpretation: 'plain' },
   ],
   teamField: 'tripId',
   permissions: {
     member: { read: 'team', create: false, update: 'team', delete: 'team', writableFields: [
       'date', 'start', 'end', 'title', 'notes', 'address', 'url', 'category',
-      'lat', 'lng', 'costPerPerson', 'outdoor', 'fixedTime',
+      'lat', 'lng', 'costPerPerson', 'outdoor', 'fixedTime', 'rating', 'ratingCount',
     ] },
     admin: ADMIN,
   },

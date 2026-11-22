@@ -109,3 +109,17 @@ export function nearestNeighbourOrder<T extends Partial<LatLng> & { fixed?: bool
 export function totalKm(points: Array<Partial<LatLng>>): number {
   return Math.round(routeLegs(points).reduce((s, l) => s + l.km, 0) * 10) / 10
 }
+
+/** Google Maps directions deep link (no API key). Up to 9 waypoints. */
+export function googleDirectionsUrl(points: LatLng[], mode: TravelMode = 'walk'): string | null {
+  if (points.length < 2) return null
+  const fmt = (p: LatLng) => `${p.lat},${p.lng}`
+  const u = new URL('https://www.google.com/maps/dir/')
+  u.searchParams.set('api', '1')
+  u.searchParams.set('origin', fmt(points[0]))
+  u.searchParams.set('destination', fmt(points[points.length - 1]))
+  const mid = points.slice(1, -1).slice(0, 9)
+  if (mid.length) u.searchParams.set('waypoints', mid.map(fmt).join('|'))
+  u.searchParams.set('travelmode', mode === 'walk' ? 'walking' : mode === 'transit' ? 'transit' : 'driving')
+  return u.toString()
+}

@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RecordData } from 'deepspace'
-import { hasCoords, totalKm } from '@/lib/geo'
+import { googleDirectionsUrl, hasCoords, totalKm } from '@/lib/geo'
 import { sortDay } from '@/lib/planCheck'
 import { CATEGORY_META, type Stop, type Trip } from './types'
 
@@ -90,6 +90,16 @@ export function RouteMap({ trip, stops, date, label }: { trip: Trip; stops: Reco
           {located.length} pinned · {totalKm(ordered)} km · approx route
         </p>
       </div>
+      {located.length > 1 && (
+        <a
+          href={googleDirectionsUrl(located as Array<{ lat: number; lng: number }>, totalKm(ordered) > 4 ? 'transit' : 'walk') ?? '#'}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute right-3 top-3 z-[500] inline-flex items-center gap-1.5 rounded-full bg-foreground px-3.5 py-2 text-xs font-semibold text-background shadow-lg hover:opacity-90"
+        >
+          Open day in Google Maps ↗
+        </a>
+      )}
       {ordered.length > located.length && (
         <p className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-full bg-card/95 px-3 py-1 text-[11px] text-warning shadow">
           {ordered.length - located.length} stop(s) not on the map yet

@@ -15,6 +15,7 @@ import type {
   MessagePart,
   ToolInvocation,
 } from './ChatPanel.stream'
+import { PlaceCards, type SuggestedPlace } from './trip/PlaceCards'
 
 type MessageTurnProps = {
   role: 'user' | 'assistant' | 'system'
@@ -64,7 +65,13 @@ export const MessageTurn = memo(function MessageTurn({
           if (!part.text) return null
           return <MarkdownText key={index}>{part.text}</MarkdownText>
         }
-        return <ToolRow key={index} invocation={part.toolInvocation} />
+        const inv = part.toolInvocation
+        // TripHive: Hive's place recommendations render as addable cards.
+        if (inv.toolName === 'show_places' && inv.state === 'result') {
+          const places = (inv.result as { places?: SuggestedPlace[] } | undefined)?.places
+          if (Array.isArray(places)) return <PlaceCards key={index} places={places} />
+        }
+        return <ToolRow key={index} invocation={inv} />
       })}
       {isStreaming && <LiveIndicator />}
     </div>
@@ -258,6 +265,27 @@ function describeTool(
       return { label: 'Deleting', path: recordPath }
     case 'user_current':
       return { label: 'Checking current user' }
+    // TripHive / Hive tools
+    case 'get_trip_overview':
+      return { label: 'Reading the trip' }
+    case 'search_places':
+      return { label: 'Searching the web for', path: typeof values?.query === 'string' ? values.query : undefined }
+    case 'find_coordinates':
+      return { label: 'Locating', path: typeof values?.place === 'string' ? values.place : undefined }
+    case 'show_places':
+      return { label: 'Preparing place cards' }
+    case 'get_weather':
+      return { label: 'Checking the forecast' }
+    case 'check_plan':
+      return { label: 'Running Plan Doctor' }
+    case 'estimate_route':
+      return { label: 'Estimating route for', path: typeof values?.date === 'string' ? values.date : undefined }
+    case 'optimize_day':
+      return { label: 'Optimizing order for', path: typeof values?.date === 'string' ? values.date : undefined }
+    case 'propose_add_stop':
+    case 'propose_update_stop':
+    case 'propose_remove_stop':
+      return { label: 'Proposing', path: typeof values?.summary === 'string' ? values.summary : undefined }
     default:
       return { label: 'Running', path: name }
   }

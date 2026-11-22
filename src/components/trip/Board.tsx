@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { RecordData } from 'deepspace'
-import { AlertTriangle, Bot, Clock, CloudRain, Lock, MapPin, Plus, Search, Sun, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bot, Clock, CloudRain, Lock, MapPin, Navigation, Plus, Search, Star, Sun, Trash2 } from 'lucide-react'
 import { Button, Input, Label, Modal, Textarea, cn, useToast } from '@/components/ui'
-import { routeLegs } from '@/lib/geo'
+import { googleDirectionsUrl, hasCoords, routeLegs } from '@/lib/geo'
 import { sortDay, toMinutes } from '@/lib/planCheck'
 import { callAction } from '@/lib/api'
 import { CATEGORY_META, type IssueRow, type Stop, type Trip } from './types'
@@ -92,8 +92,20 @@ export function ItineraryDay({
           return (
             <div key={s.id} className="relative">
               {leg && (
-                <p className="-ml-1 py-1.5 font-mono text-[11px] text-muted-foreground">
-                  {leg.mode === 'walk' ? '🚶' : '🚇'} {leg.minutes} min · {leg.km} km
+                <p className="-ml-1 flex items-center gap-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+                  <span>
+                    {leg.mode === 'walk' ? '🚶' : '🚇'} {leg.minutes} min · {leg.km} km
+                  </span>
+                  {(() => {
+                    const a = ordered[leg.fromIndex]
+                    const b = ordered[leg.toIndex]
+                    const url = hasCoords(a) && hasCoords(b) ? googleDirectionsUrl([a, b], leg.mode) : null
+                    return url ? (
+                      <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-honey hover:underline">
+                        <Navigation className="size-3" /> directions
+                      </a>
+                    ) : null
+                  })()}
                 </p>
               )}
               <span
@@ -153,6 +165,12 @@ function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>;
           )}
         </div>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[11px] text-muted-foreground">
+          {typeof d.rating === 'number' && (
+            <span className="flex items-center gap-0.5 text-foreground">
+              <Star className="size-3 fill-[var(--color-honey)] text-honey" />
+              {d.rating.toFixed(1)}
+            </span>
+          )}
           <span>{meta.label}</span>
           {d.start && (
             <span className="flex items-center gap-1">
@@ -182,7 +200,7 @@ function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>;
   )
 }
 
-type PlaceHit = { name: string; address: string; lat: number; lng: number; kind: string }
+type PlaceHit = { name: string; address: string; lat: number; lng: number; kind: string; rating?: number; ratingCount?: number; mapsUrl?: string }
 
 const EMPTY: Partial<Stop> = { title: '', start: '', end: '', category: 'sight', notes: '', address: '', url: '' }
 
@@ -283,11 +301,25 @@ export function StopModal({
                       type="button"
                       className="w-full px-3 py-2 text-left hover:bg-accent"
                       onClick={() => {
-                        set({ title: form.title || h.name, address: h.address, lat: h.lat, lng: h.lng })
+                        set({
+                          title: form.title || h.name,
+                          address: h.address,
+                          lat: h.lat,
+                          lng: h.lng,
+                          rating: h.rating,
+                          ratingCount: h.ratingCount,
+                          url: form.url || h.mapsUrl,
+                        })
                         setHits([])
                       }}
                     >
                       <span className="font-medium">{h.name}</span>
+                      {typeof h.rating === 'number' && (
+                        <span className="ml-2 font-mono text-[11px] text-muted-foreground">
+                          ★ {h.rating.toFixed(1)}
+                          {h.ratingCount ? ` (${h.ratingCount.toLocaleString()})` : ''}
+                        </span>
+                      )}
                       <span className="block truncate text-xs text-muted-foreground">{h.address}</span>
                     </button>
                   </li>

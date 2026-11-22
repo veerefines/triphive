@@ -15,7 +15,7 @@ import { nearestNeighbourOrder, routeLegs, totalKm } from '../lib/geo'
 import {
   TripError,
   createProposal,
-  geocodePlace,
+  findPlaces,
   listMembers,
   loadPlan,
   logActivity,
@@ -60,7 +60,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   }
 }
 
-export function buildTripTools(tools: ActionTools, tripId: string, userId: string): ToolSet {
+export function buildTripTools(tools: ActionTools, tripId: string, userId: string, googleKey?: string): ToolSet {
   return {
     get_trip_overview: tool({
       description:
@@ -111,14 +111,57 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
 
     find_coordinates: tool({
       description:
-        'Geocode a specific named place (OpenStreetMap) near the trip destination. Always do this before proposing a new stop so routing and travel checks work.',
+        'Look up a specific named place near the trip (Google Places with rating when available, else OpenStreetMap). Returns coordinates, address, rating and a Maps link. Always do this before proposing a new stop.',
       inputSchema: z.object({ place: z.string().min(2).max(160) }),
       execute: ({ place }) =>
         guard(async () => {
           const { trip } = await loadPlan(tools, tripId)
-          let hits = await geocodePlace(place, trip.data, 3)
-          if (!hits.length) hits = await geocodePlace(`${place}, ${trip.data.destination}`, undefined, 3)
+          const hits = await findPlaces(googleKey, place, trip.data, 3)
           return hits.length ? { candidates: hits } : { error: 'No match; try a more specific name or skip coordinates.' }
+        }),
+    }),
+
+    show_places: tool({
+      description:
+        'Show the user a set of recommended places as interactive cards with a one-click "Add to day" button. Use this WHENEVER you recommend specific places (instead of only listing them in text). Each place is looked up for coordinates, address and rating. Adding from a card is the user\'s own action, so no vote is needed.',
+      inputSchema: z.object({
+        places: z
+          .array(
+            z.object({
+              name: z.string().min(2).max(120).describe('Specific place name, e.g. "Elephant Falls"'),
+              why: z.string().max(300).describe('One line: why it fits this group'),
+              category: z.enum(['food', 'sight', 'activity', 'stay', 'transport', 'other']),
+              date: YMD.optional().describe('Suggested day within the trip'),
+              start: HHMM.optional(),
+              end: HHMM.optional(),
+              costPerPerson: z.number().min(0).optional().describe('USD estimate'),
+              outdoor: z.boolean().optional(),
+              sourceUrl: z.string().url().optional(),
+            }),
+          )
+          .min(1)
+          .max(8),
+      }),
+      execute: ({ places }) =>
+        guard(async () => {
+          const { trip } = await loadPlan(tools, tripId)
+          const enriched = await Promise.all(
+            places.map(async (p) => {
+              const hit = (await findPlaces(googleKey, p.name, trip.data, 1).catch(() => []))[0]
+              return {
+                ...p,
+                lat: hit?.lat,
+                lng: hit?.lng,
+                address: hit?.address,
+                rating: hit?.rating,
+                ratingCount: hit?.ratingCount,
+                mapsUrl: hit?.mapsUrl,
+                openNow: hit?.openNow,
+                located: !!hit,
+              }
+            }),
+          )
+          return { places: enriched, note: 'Rendered as cards with an Add button. Keep your text reply short; do not repeat every place.' }
         }),
     }),
 
@@ -218,7 +261,8 @@ export function tripSystemPrompt(today: string): string {
     'How you work:',
     '1. Start every task with get_trip_overview. Use the real stop ids, member preferences, issues and forecast it returns. Never invent ids.',
     '2. You cannot edit the itinerary directly. Every change is a proposal (propose_add_stop / propose_update_stop / propose_remove_stop) that the group votes on. Say so briefly when you make them.',
-    '3. Before proposing a new place: search_places to find real, specific, currently-operating places, then find_coordinates for lat/lng. Cite source URLs in `sources`.',
+    '3. To RECOMMEND places ("what should we see", "best cafes"): search_places, then call show_places with the specific places — the user gets cards with ratings and one-click Add. Keep the text reply to a 1–2 line summary.',
+    '3b. To CHANGE the shared plan ("plan day 1", "fix conflicts"): use proposals. Before proposing a new place, find_coordinates for lat/lng/rating. Cite source URLs in `sources`.',
     '4. Respect everyone: the slowest pace, the tightest budget, dietary needs, the latest wake time. In `reason`, name whose preference drove the choice ("Ana is vegetarian", "Sam\'s $80/day budget").',
     '5. Avoid overlaps and leave realistic travel time (use estimate_route). Prefer clustering stops by neighbourhood; use optimize_day when a day zig-zags.',
     '6. After proposing changes, run check_plan mentally against them; if the user asks to "fix" things, read issues first and propose the smallest set of changes that resolves them.',

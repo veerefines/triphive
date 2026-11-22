@@ -126,6 +126,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
    * an authenticated app owner/admin. deepspace dev/test set it locally.
    */
   ALLOW_DEBUG_ROUTES?: string
+  /** Optional: Google Places (New) key for ratings. `npx deepspace secrets set GOOGLE_MAPS_API_KEY=...` */
+  GOOGLE_MAPS_API_KEY?: string
 }
 
 export type AppContext = { Bindings: Env }

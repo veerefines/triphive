@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from 'deepspace'
-import { CalendarDays, MapPin, Plus, Ticket } from 'lucide-react'
-import { Button, Input, Label, useToast } from '@/components/ui'
+import { useAuth, useQuery } from 'deepspace'
+import { CalendarDays, LogOut, MapPin, Plus, Ticket, Trash2 } from 'lucide-react'
+import { Button, ConfirmModal, Input, Label, useToast } from '@/components/ui'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
 
@@ -67,6 +67,28 @@ export default function TripsPage() {
   const { records: trips, status } = useQuery<Trip>('trips', { orderBy: 'startDate', orderDir: 'asc' })
   const navigate = useNavigate()
   const toast = useToast()
+  const { userId } = useAuth()
+  // My membership rows (RBAC 'team' scopes these to my trips) → owner vs member per trip.
+  const { records: memberships } = useQuery<{ teamId: string; userId: string; role: string }>('team_members', {
+    where: { userId: userId ?? '' },
+  })
+  const roleIn = (tripId: string) => memberships.find((m) => m.data.teamId === tripId)?.data.role
+  const [removing, setRemoving] = useState<{ id: string; title: string; owner: boolean } | null>(null)
+  // The live query may keep a cached row after membership is revoked; hide it at once.
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
+
+  async function confirmRemove() {
+    if (!removing) return
+    try {
+      await callAction(removing.owner ? 'deleteTrip' : 'leaveTrip', { tripId: removing.id })
+      setHidden((h) => new Set(h).add(removing.id))
+      toast.success(removing.owner ? 'Trip deleted' : 'You left the trip', removing.title)
+    } catch (err) {
+      toast.error(removing.owner ? 'Could not delete' : 'Could not leave', (err as Error).message)
+    } finally {
+      setRemoving(null)
+    }
+  }
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
   const [code, setCode] = useState('')
@@ -122,10 +144,20 @@ export default function TripsPage() {
             </div>
           )}
           <div className="grid gap-5 sm:grid-cols-2">
-            {trips.map((t) => {
+            {trips.filter((t) => !hidden.has(t.recordId)).map((t) => {
+              const owner = roleIn(t.recordId) === 'owner'
               return (
+                <div key={t.recordId} className="group/card relative">
+                <button
+                  type="button"
+                  onClick={() => setRemoving({ id: t.recordId, title: t.data.title, owner })}
+                  aria-label={owner ? `Delete ${t.data.title}` : `Leave ${t.data.title}`}
+                  title={owner ? 'Delete trip' : 'Leave trip'}
+                  className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-card/95 text-muted-foreground shadow transition hover:text-destructive sm:opacity-0 sm:group-hover/card:opacity-100 focus-visible:opacity-100"
+                >
+                  {owner ? <Trash2 className="size-4" /> : <LogOut className="size-4" />}
+                </button>
                 <Link
-                  key={t.recordId}
                   to={`/trips/${t.recordId}`}
                   className="card-lift group overflow-hidden rounded-3xl border border-border bg-card"
                 >
@@ -151,6 +183,7 @@ export default function TripsPage() {
                     </p>
                   </div>
                 </Link>
+                </div>
               )
             })}
           </div>
@@ -202,6 +235,19 @@ export default function TripsPage() {
           </form>
         </aside>
       </div>
+      <ConfirmModal
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        title={removing?.owner ? `Delete “${removing.title}”?` : `Leave “${removing?.title ?? ''}”?`}
+        description={
+          removing?.owner
+            ? 'This removes every stop, vote and preference for all travelers. It cannot be undone.'
+            : 'You will lose access until someone shares the invite code again.'
+        }
+        confirmText={removing?.owner ? 'Delete trip' : 'Leave trip'}
+        variant="destructive"
+        onConfirm={confirmRemove}
+      />
     </div>
   )
 }

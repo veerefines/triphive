@@ -128,7 +128,9 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const tripId = str(params.tripId)
     const trip = await getTrip(tools, tripId)
     if (!trip) throw new TripError('Trip not found')
-    if (trip.createdBy !== userId) throw new TripError('Only the trip owner can delete it')
+    const members = await listMembers(tools, tripId)
+    const isOwner = trip.createdBy === userId || members.some((m) => m.data.userId === userId && m.data.role === 'owner')
+    if (!isOwner) throw new TripError('Only the trip organizer can delete it')
     for (const coll of ['stops', 'prefs', 'issues', 'proposals', 'activity'] as const) {
       for (let i = 0; i < 20; i++) {
         const r = await tools.deleteWhere(coll, { tripId }, 500)

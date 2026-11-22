@@ -5,6 +5,7 @@
  *   3. B joins with the invite code.
  *   4. A adds a stop; it appears live for B.
  *   5. A adds an overlapping stop; Plan Doctor's issue appears for B.
+ *   6. B leaves via the trips list. 7. A deletes via the trips list.
  * Hive (LLM) is verified manually — it is non-deterministic and billed.
  */
 import { test, expect, loadAllTestAccounts } from 'deepspace/testing'
@@ -59,8 +60,17 @@ test('two travelers plan one trip together', async ({ users }) => {
   await b.page.getByRole('button', { name: /^Issues/ }).click()
   await expect(b.page.getByTestId('issue').filter({ hasText: 'overlaps' })).toBeVisible({ timeout: 20_000 })
 
-  // Cleanup: owner deletes the trip.
-  await a.page.getByRole('button', { name: 'Delete trip' }).click()
-  await a.page.getByRole('button', { name: 'Delete trip' }).last().click()
-  await expect(a.page).toHaveURL(/\/trips$/, { timeout: 20_000 })
+  // 6. B leaves from the trips list; the card disappears for B only.
+  await b.page.goto('/trips')
+  await b.page.getByRole('button', { name: `Leave ${title}` }).click()
+  await b.page.getByRole('dialog').getByRole('button', { name: 'Leave trip' }).click()
+  await expect(b.page.getByRole('heading', { name: title })).toHaveCount(0, { timeout: 20_000 })
+
+  // 7. A (organizer) deletes from the trips list; the trip is gone.
+  await a.page.goto('/trips')
+  await a.page.getByRole('button', { name: `Delete ${title}` }).click()
+  await a.page.getByRole('dialog').getByRole('button', { name: 'Delete trip' }).click()
+  await expect(a.page.getByRole('heading', { name: title })).toHaveCount(0, { timeout: 20_000 })
+  await a.page.goto(tripUrl)
+  await expect(a.page.getByText('Trip not found')).toBeVisible({ timeout: 20_000 })
 })

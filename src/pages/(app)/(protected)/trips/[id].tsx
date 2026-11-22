@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getUserColor, listDeepSpaceAgentModels, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
-import { ArrowLeft, Bot, CloudSun, Copy, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeft, Bot, CloudSun, Copy, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
 import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
@@ -207,9 +207,13 @@ export default function TripPage() {
             <Button size="sm" variant="outline" loading={busy === 'Email'} onClick={() => run('Email', () => callAction('emailItinerary', { tripId }), 'Itinerary emailed to the group')}>
               <Mail /> Email plan
             </Button>
-            {isOwner && (
-              <Button size="sm" variant="ghost" aria-label="Delete trip" onClick={() => setConfirmDelete(true)}>
-                <Trash2 />
+            {isOwner ? (
+              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>
+                <Trash2 /> Delete trip
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setConfirmDelete(true)}>
+                <LogOut /> Leave trip
               </Button>
             )}
           </div>
@@ -387,13 +391,17 @@ export default function TripPage() {
       <ConfirmModal
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        title="Delete this trip?"
-        description="This removes every stop, vote and preference for all travelers. It cannot be undone."
-        confirmText="Delete trip"
+        title={isOwner ? 'Delete this trip?' : 'Leave this trip?'}
+        description={
+          isOwner
+            ? 'This removes every stop, vote and preference for all travelers. It cannot be undone.'
+            : 'You will lose access until someone shares the invite code again.'
+        }
+        confirmText={isOwner ? 'Delete trip' : 'Leave trip'}
         variant="destructive"
         onConfirm={() =>
-          run('Delete', async () => {
-            await callAction('deleteTrip', { tripId })
+          run(isOwner ? 'Delete' : 'Leave', async () => {
+            await callAction(isOwner ? 'deleteTrip' : 'leaveTrip', { tripId })
             navigate('/trips')
           })
         }

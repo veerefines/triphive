@@ -57,8 +57,8 @@ export default function Navigation() {
         to={item.path}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'px-3 py-1.5 text-sm',
-          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+          'rounded-full px-3.5 py-1.5 text-sm transition',
+          active ? 'bg-foreground/[0.06] font-medium text-foreground' : 'text-muted-foreground hover:text-foreground',
         )}
       >
         {item.label}
@@ -68,10 +68,10 @@ export default function Navigation() {
 
   return (
     <>
-      <nav data-testid="app-navigation" className="border-b border-border bg-background">
-        <div className="mx-auto flex h-12 max-w-7xl items-center gap-4 px-4">
+      <nav data-testid="app-navigation" className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-xl">
+        <div className="flex h-14 items-center gap-4 px-6">
           <Link to="/trips" className="text-sm font-semibold text-foreground">
-            <span className="font-display">🐝 TripHive</span>
+            <span className="font-display text-lg">🐝 TripHive</span>
           </Link>
 
           <div className="hidden items-center md:flex">{visibleNav.map(navLink)}</div>

@@ -26,7 +26,11 @@ export function ItineraryDay({
   onSelect,
   onAdd,
   onEdit,
+  activeStopId,
+  onHoverStop,
 }: {
+  activeStopId?: string | null
+  onHoverStop?: (id: string | null) => void
   date: string
   index: number | null
   trip: Trip
@@ -90,7 +94,14 @@ export function ItineraryDay({
           const editors = peers.filter((p) => p.state.editingStopId === s.id)
           const meta = CATEGORY_META[s.category ?? 'other'] ?? CATEGORY_META.other
           return (
-            <div key={s.id} className="relative">
+            <div
+              key={s.id}
+              id={`stop-${s.id}`}
+              className="anim-in relative scroll-mt-24"
+              style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+              onMouseEnter={() => onHoverStop?.(s.id)}
+              onMouseLeave={() => onHoverStop?.(null)}
+            >
               {leg && (
                 <p className="-ml-1 flex items-center gap-2 py-1.5 font-mono text-[11px] text-muted-foreground">
                   <span>
@@ -114,7 +125,13 @@ export function ItineraryDay({
               >
                 {i + 1}
               </span>
-              <StopCard stop={s.record} flagged={flagged.has(s.id)} editors={editors.map((e) => e.userName)} onClick={() => canWrite && onEdit(s.record)} />
+              <StopCard
+                stop={s.record}
+                active={activeStopId === s.id}
+                flagged={flagged.has(s.id)}
+                editors={editors.map((e) => e.userName)}
+                onClick={() => canWrite && onEdit(s.record)}
+              />
             </div>
           )
         })}
@@ -138,7 +155,7 @@ export function ItineraryDay({
   )
 }
 
-function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>; flagged: boolean; editors: string[]; onClick: () => void }) {
+function StopCard({ stop, active, flagged, editors, onClick }: { stop: RecordData<Stop>; active?: boolean; flagged: boolean; editors: string[]; onClick: () => void }) {
   const d = stop.data
   const meta = CATEGORY_META[d.category ?? 'other'] ?? CATEGORY_META.other
   return (
@@ -149,6 +166,7 @@ function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>;
       className={cn(
         'card-lift relative flex w-full items-center gap-3 rounded-2xl border bg-card p-2.5 text-left',
         flagged ? 'border-warning/60' : 'border-transparent',
+        active && 'border-foreground/30 shadow-[var(--shadow-card-hover)]',
         editors.length > 0 && 'ring-2 ring-info/50',
       )}
     >

@@ -248,3 +248,11 @@ body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .th-tiles { filter: saturate(0.55) sepia(0.18) brightness(1.03) contrast(0.95); }
 .font-mono { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -0.01em; }
+
+/* Motion — respects reduced-motion */
+@keyframes th-fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes th-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.anim-in { animation: th-fade-up .35s cubic-bezier(.2,.7,.2,1) both; }
+.skeleton { border-radius: 1rem; background: linear-gradient(90deg, var(--color-muted) 0%, color-mix(in oklab, var(--color-muted) 60%, white) 50%, var(--color-muted) 100%); background-size: 800px 100%; animation: th-shimmer 1.4s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .anim-in, .skeleton { animation: none; } }
+.th-pin-active { transform: scale(1.25); z-index: 1000 !important; }

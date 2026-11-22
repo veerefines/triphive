@@ -53,6 +53,13 @@ export default function TripPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [activeStopId, setActiveStopId] = useState<string | null>(null)
+  const [mobileTab, setMobileTab] = useState<'plan' | 'map' | 'hive'>('plan')
+  const focusStop = useCallback((id: string) => {
+    setActiveStopId(id)
+    setMobileTab('plan')
+    document.getElementById(`stop-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
 
   // One persistent Hive chat per user per trip (ai-chats are private, `'own'`).
   const chatKey = `triphive:chat:${tripId}`
@@ -87,7 +94,26 @@ export default function TripPage() {
     updateState({ editingStopId: editing?.stop?.recordId ?? null })
   }, [editing, updateState])
 
-  if (status === 'loading') return <div className="p-10 text-muted-foreground">Loading trip…</div>
+  if (status === 'loading')
+    return (
+      <div className="flex h-full flex-col gap-4 p-6" aria-busy="true" aria-label="Loading trip">
+        <div className="skeleton h-10 w-72" />
+        <div className="flex gap-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton h-8 w-24 rounded-full" />
+          ))}
+        </div>
+        <div className="flex min-h-0 flex-1 gap-4">
+          <div className="w-full space-y-3 lg:w-[420px]">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-20" />
+            ))}
+          </div>
+          <div className="skeleton hidden flex-1 rounded-3xl lg:block" />
+          <div className="skeleton hidden w-[380px] rounded-3xl lg:block" />
+        </div>
+      </div>
+    )
   if (!trip)
     return (
       <div className="mx-auto max-w-md p-10 text-center">
@@ -141,8 +167,8 @@ export default function TripPage() {
             <ArrowLeft className="size-4" />
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display truncate text-3xl font-bold tracking-tight">{t.title}</h1>
-            <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+            <h1 className="font-display line-clamp-2 text-2xl font-bold tracking-tight sm:text-3xl">{t.title}</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 whitespace-nowrap font-mono text-[11px]">
               <span className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1"><MapPin className="size-3 text-honey" /> {t.destination}</span>
               <span className="rounded-full border border-border px-2.5 py-1">
                 {weekday(t.startDate, { month: 'short', day: 'numeric' })} – {weekday(t.endDate, { month: 'short', day: 'numeric' })}
@@ -158,7 +184,7 @@ export default function TripPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center gap-3 sm:w-auto">
             <div className="flex items-center -space-x-2" aria-label="Travelers">
               {members.map((m) => {
                 const u = users.find((x) => x.id === m.data.userId)
@@ -197,7 +223,7 @@ export default function TripPage() {
             </button>
           </div>
 
-          <div className="flex w-full flex-wrap gap-2 xl:ml-auto xl:w-auto">
+          <div className="scrollbar-none -mx-6 flex w-[calc(100%+3rem)] gap-2 overflow-x-auto px-6 xl:mx-0 xl:ml-auto xl:w-auto xl:overflow-visible xl:px-0 [&>*]:shrink-0">
             <Button size="sm" variant={myPrefs ? 'outline' : 'default'} onClick={() => setPrefsOpen(true)}>
               <SlidersHorizontal /> {myPrefs ? 'My style' : 'Set my style'}
             </Button>
@@ -242,9 +268,35 @@ export default function TripPage() {
         </div>
       </header>
 
+      <div className="px-6 pb-3 lg:hidden">
+        <div className="grid grid-cols-3 rounded-full border border-border bg-card p-1 text-sm font-medium" role="tablist" aria-label="View">
+          {(
+            [
+              ['plan', 'Itinerary'],
+              ['map', 'Map'],
+              ['hive', `Hive${pendingCount ? ` · ${pendingCount}` : ''}`],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={mobileTab === k}
+              onClick={() => setMobileTab(k)}
+              className={cn('rounded-full py-1.5 transition', mobileTab === k ? 'bg-foreground text-background' : 'text-muted-foreground')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pb-6 lg:flex-row">
         {/* Itinerary */}
-        <section className="scrollbar-none min-h-0 w-full shrink-0 space-y-8 overflow-y-auto lg:w-[420px]" aria-label="Itinerary">
+        <section
+          className={cn('scrollbar-none min-h-0 w-full shrink-0 space-y-8 overflow-y-auto lg:block lg:w-[420px]', mobileTab !== 'plan' && 'hidden')}
+          aria-label="Itinerary"
+        >
           {dates.map((d, i) => (
             <ItineraryDay
               key={d}
@@ -257,6 +309,8 @@ export default function TripPage() {
               canWrite={stopMut.ready}
               selected={mapDate === d}
               onSelect={() => setMapDate(d)}
+              activeStopId={activeStopId}
+              onHoverStop={setActiveStopId}
               onAdd={(date) => setEditing({ stop: null, date })}
               onEdit={(stop) => setEditing({ stop, date: stop.data.date })}
             />
@@ -280,14 +334,27 @@ export default function TripPage() {
         </section>
 
         {/* Map */}
-        <section className="hidden min-h-0 min-w-0 flex-1 lg:block" aria-label="Map">
+        <section className={cn('min-h-[60vh] min-w-0 flex-1 lg:block lg:min-h-0', mobileTab !== 'map' && 'hidden')} aria-label="Map">
           {mapDate && (
-            <RouteMap trip={t} stops={stops} date={mapDate} label={`Day ${mapIndex + 1} · ${weekday(mapDate, { weekday: 'long', month: 'short', day: 'numeric' })}`} />
+            <RouteMap
+              trip={t}
+              stops={stops}
+              date={mapDate}
+              label={`Day ${mapIndex + 1} · ${weekday(mapDate, { weekday: 'long', month: 'short', day: 'numeric' })}`}
+              activeStopId={activeStopId}
+              onPinClick={focusStop}
+              onPinHover={setActiveStopId}
+            />
           )}
         </section>
 
         {/* Side panel */}
-        <aside className="flex min-h-[520px] w-full shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)] lg:w-[380px]">
+        <aside
+          className={cn(
+            'min-h-[520px] w-full shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)] lg:flex lg:w-[380px]',
+            mobileTab === 'hive' ? 'flex' : 'hidden',
+          )}
+        >
           <div className="flex gap-1 border-b border-border p-1.5 text-sm">
             {(
               [
@@ -354,6 +421,7 @@ export default function TripPage() {
                 onAskHive={(p) => {
                   setPendingPrompt(p)
                   setSide('hive')
+                  setMobileTab('hive')
                 }}
               />
             )}

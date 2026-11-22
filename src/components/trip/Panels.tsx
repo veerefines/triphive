@@ -38,7 +38,7 @@ export function IssuesPanel({ issues, onAskHive }: { issues: RecordData<IssueRow
         <div
           key={i.recordId}
           data-testid="issue"
-          className={cn('rounded-xl border p-3 text-sm', i.data.severity === 'error' ? 'border-destructive/40 bg-destructive/5' : 'border-warning/40 bg-warning/5')}
+          className={cn('anim-in rounded-2xl border p-3.5 text-sm', i.data.severity === 'error' ? 'border-destructive/40 bg-destructive/5' : 'border-warning/40 bg-warning/5')}
         >
           <div className="mb-1 flex items-center gap-2 text-xs">
             <AlertTriangle className={cn('size-3.5', i.data.severity === 'error' ? 'text-destructive' : 'text-warning')} />
@@ -133,7 +133,7 @@ export function ProposalsPanel({
         const no = Object.values(votes).filter((v) => v === -1).length
         const mine = votes[me]
         return (
-          <div key={p.recordId} data-testid="proposal" className="rounded-xl border border-border bg-card p-3 text-sm">
+          <div key={p.recordId} data-testid="proposal" className="anim-in rounded-2xl border border-border bg-background/60 p-3.5 text-sm">
             <div className="mb-1 flex items-center justify-between gap-2">
               <p className="font-semibold">{p.data.summary}</p>
               <Badge variant="outline" size="sm">
@@ -152,7 +152,16 @@ export function ProposalsPanel({
                 ))}
               </div>
             )}
-            <p className="mt-1.5 text-[11px] text-muted-foreground">Asked by {nameOf(p.data.proposedFor)}{no > 0 ? ` · ${no} 👎` : ''}</p>
+            <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
+              Asked by {nameOf(p.data.proposedFor)}
+              {Object.keys(votes).length > 0 &&
+                ` · ${Object.entries(votes)
+                  .map(([uid, v]) => `${v === 1 ? '👍' : '👎'} ${nameOf(uid)}`)
+                  .join(', ')}`}
+            </p>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+              <div className="h-full rounded-full bg-success transition-all" style={{ width: `${Math.min(100, (yes / (Math.floor(n / 2) + 1)) * 100)}%` }} />
+            </div>
             <div className="mt-2 flex gap-2">
               <Button size="sm" variant={mine === 1 ? 'default' : 'outline'} disabled={busy === p.recordId} onClick={() => vote(p.recordId, 1)}>
                 <ThumbsUp /> Yes

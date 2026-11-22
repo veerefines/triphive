@@ -135,7 +135,19 @@ export default function TripsPage() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
         <section>
-          {status === 'loading' && <p className="text-muted-foreground">Loading trips…</p>}
+          {status === 'loading' && (
+            <div className="grid gap-5 sm:grid-cols-2" aria-busy="true" aria-label="Loading trips">
+              {[0, 1].map((i) => (
+                <div key={i} className="overflow-hidden rounded-3xl border border-border bg-card">
+                  <div className="skeleton h-40 rounded-none" />
+                  <div className="space-y-2 p-4">
+                    <div className="skeleton h-5 w-2/3" />
+                    <div className="skeleton h-4 w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {status === 'ready' && trips.length === 0 && (
             <div className="rounded-3xl border border-dashed border-border bg-card/60 p-12 text-center">
               <p className="text-4xl">🧳</p>
@@ -144,10 +156,10 @@ export default function TripsPage() {
             </div>
           )}
           <div className="grid gap-5 sm:grid-cols-2">
-            {trips.filter((t) => !hidden.has(t.recordId)).map((t) => {
+            {trips.filter((t) => !hidden.has(t.recordId)).map((t, idx) => {
               const owner = roleIn(t.recordId) === 'owner'
               return (
-                <div key={t.recordId} className="group/card relative">
+                <div key={t.recordId} className="anim-in group/card relative" style={{ animationDelay: `${Math.min(idx, 8) * 50}ms` }}>
                 <button
                   type="button"
                   onClick={() => setRemoving({ id: t.recordId, title: t.data.title, owner })}

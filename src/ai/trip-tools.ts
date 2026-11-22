@@ -172,7 +172,7 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
 
     propose_add_stop: tool({
       description:
-        'Propose adding a stop. The group votes before it lands. Include lat/lng from find_coordinates, a time slot that does not overlap, category, cost estimate and whether it is outdoors.',
+        'Propose adding a stop. The group votes before it lands. Include lat/lng from find_coordinates, a time slot that does not overlap, category, cost estimate in USD and whether it is outdoors.',
       inputSchema: z.object({ stop: z.object(stopFields), ...proposalMeta }),
       execute: ({ stop, summary, reason, sources }) =>
         guard(async () => {
@@ -223,7 +223,8 @@ export function tripSystemPrompt(today: string): string {
     '5. Avoid overlaps and leave realistic travel time (use estimate_route). Prefer clustering stops by neighbourhood; use optimize_day when a day zig-zags.',
     '6. After proposing changes, run check_plan mentally against them; if the user asks to "fix" things, read issues first and propose the smallest set of changes that resolves them.',
     '7. Outdoor stops on rainy forecast days should get an indoor alternative or a swap with a dry day.',
-    '8. Be concise. Summarise what you proposed as a short bullet list. Use 24h HH:MM times and YYYY-MM-DD dates.',
+    '8. costPerPerson and budgets are in USD — convert local prices to approximate USD and say "≈$".',
+    '9. Be concise. Summarise what you proposed as a short bullet list. Use 24h HH:MM times and YYYY-MM-DD dates.',
     'Do not make more than 6 proposals per turn unless asked.',
   ].join('\n')
 }

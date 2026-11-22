@@ -132,7 +132,7 @@ export default function TripPage() {
           <div className="min-w-0">
             <h1 className="font-display truncate text-2xl font-bold">{t.title}</h1>
             <p className="text-sm text-muted-foreground">
-              {t.destination} · {t.startDate} → {t.endDate} · {dates.length} days
+              {t.destination} · {t.startDate} → {t.endDate} · {dates.length} day{dates.length === 1 ? '' : 's'}
             </p>
           </div>
 

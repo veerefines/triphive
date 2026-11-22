@@ -19,6 +19,7 @@ import {
   YjsRoom,
 } from 'deepspace/worker'
 import type { DOBindings, DOManifest, Job, JobContext } from 'deepspace/worker'
+import type { UserAttachment } from 'deepspace/worker'
 import { AI_CHATS_SCHEMA } from 'deepspace/schema'
 import { registerAgent } from './src/ai/agent.js'
 import { buildTools } from './src/ai/tools.js'
@@ -62,6 +63,13 @@ export class AppCronRoom extends CronRoom<Env> {
 
   protected async onTask(taskName: string): Promise<void> {
     await runCronTask(taskName, this.env)
+  }
+
+  // weather-watch spends owner credits (weather + email), so only the app
+  // owner may trigger/pause it from a monitor socket — not every member.
+  protected onConnect(ws: WebSocket, user: UserAttachment): ReturnType<CronRoom<Env>['onConnect']> {
+    const attachment = super.onConnect(ws, user)
+    return { ...attachment, canWrite: attachment.canWrite && user.userId === this.env.OWNER_USER_ID }
   }
 }
 

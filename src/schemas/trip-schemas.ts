@@ -184,6 +184,21 @@ export const activitySchema: CollectionSchema = {
   },
 }
 
+/** Server-only Hive spend counter: one row per user per UTC day. */
+export const aiUsageSchema: CollectionSchema = {
+  name: 'ai_usage',
+  columns: [
+    { name: 'userId', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'day', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'count', storage: 'number', interpretation: 'plain' },
+  ],
+  uniqueOn: ['userId', 'day'],
+  permissions: {
+    member: { read: false, create: false, update: false, delete: false },
+    admin: { read: true, create: false, update: false, delete: false },
+  },
+}
+
 export const tripSchemas: CollectionSchema[] = [
   tripsSchema,
   teamMembersSchema,
@@ -192,4 +207,5 @@ export const tripSchemas: CollectionSchema[] = [
   issuesSchema,
   proposalsSchema,
   activitySchema,
+  aiUsageSchema,
 ]

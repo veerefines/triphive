@@ -187,22 +187,6 @@ export function registerAiChatRoutes(
       )
     }
 
-    // TripHive: owner-billed, so cap turns per user per UTC day.
-    {
-      const privileged = createActionTools(c.env, auth.userId, jwt)
-      const mine = await privileged.query<{ role: string }>('ai-messages', {
-        where: { userId: auth.userId, role: 'user' },
-        orderBy: 'createdAt',
-        orderDir: 'desc',
-        limit: HIVE_DAILY_TURNS + 1,
-      })
-      const today = new Date().toISOString().slice(0, 10)
-      const used = mine.success ? mine.data.records.filter((r) => r.createdAt.slice(0, 10) === today).length : 0
-      if (used >= HIVE_DAILY_TURNS) {
-        return c.json({ error: `Hive's daily limit (${HIVE_DAILY_TURNS} messages) is reached — try again tomorrow.` }, 429)
-      }
-    }
-
     // TripHive: verify membership BEFORE any model call. The tripId comes from
     // the client, so it is only trusted after requireMember passes.
     let tripTools: ReturnType<typeof buildTripTools> | null = null
@@ -215,7 +199,26 @@ export function registerAiChatRoutes(
         throw err
       }
       tripTools = buildTripTools(privileged, tripId, auth.userId)
+
+      // Owner-billed → reserve one turn in the server-only ai_usage counter
+      // BEFORE the model call. Users cannot read or delete it; any failure to
+      // reserve fails closed. (Two truly simultaneous requests can both pass
+      // the read — bounded overshoot of 1–2 turns, accepted.)
+      const day = new Date().toISOString().slice(0, 10)
+      const usage = await privileged.query<{ count: number }>('ai_usage', { where: { userId: auth.userId, day }, limit: 1 })
+      if (!usage.success) return c.json({ error: 'Usage check failed, try again' }, 503)
+      const row = usage.data.records[0]
+      const used = Number(row?.data.count ?? 0)
+      if (used >= HIVE_DAILY_TURNS) {
+        return c.json({ error: `Hive's daily limit (${HIVE_DAILY_TURNS} messages) is reached — try again tomorrow.` }, 429)
+      }
+      const reserved = row
+        ? await privileged.update('ai_usage', row.recordId, { count: used + 1 })
+        : await privileged.create('ai_usage', { userId: auth.userId, day, count: 1 })
+      if (!reserved.success) return c.json({ error: 'Usage check failed, try again' }, 503)
     }
+    // Owner pays ONLY for verified trip chats; anything else is user-billed.
+    const billingToken = tripTools ? undefined : jwt
 
     const stub = recordRoomStub(c.env)
     const chat = await getChat(stub, chatId, auth.userId)
@@ -258,11 +261,10 @@ export function registerAiChatRoutes(
         ? { text: chat.compactedSummary, throughId: chat.compactedThroughId }
         : undefined
 
-    // TripHive bills Hive to the app owner (omitting authToken → APP_OWNER_JWT):
-    // travelers sign in with fresh DeepSpace accounts that carry no credits,
-    // and a user-billed planner would 402 for every one of them. Only verified
-    // trip members reach this point, and HIVE_DAILY_TURNS caps spend per user.
-    const summarizer = makeDefaultSummarizer(c.env)
+    // TripHive: trip chats are owner-billed (travelers' fresh accounts carry no
+    // credits, so a user-billed planner would 402 for every one of them). Only
+    // verified members get here, and ai_usage caps each user per day.
+    const summarizer = makeDefaultSummarizer(c.env, billingToken ? { authToken: billingToken } : {})
     const { messages: prepared, newSummary } = await prepareMessagesWithCompaction(
       turns,
       DEFAULT_CONTEXT_CONFIG,
@@ -397,7 +399,7 @@ export function registerAiChatRoutes(
     const { result } = streamDeepSpaceAgent(c.env, {
       profile: 'application',
       modelId: usedModelId,
-      // Owner-billed — see the summarizer note above.
+      ...(billingToken ? { authToken: billingToken } : {}),
       instructions: systemText,
       messages,
       tools,

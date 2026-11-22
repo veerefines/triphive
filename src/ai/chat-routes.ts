@@ -61,6 +61,8 @@ const MAX_USER_CONTENT_LENGTH = 100_000
 
 /** Owner-billed AI: per-user daily message cap. */
 const HIVE_DAILY_TURNS = 40
+/** Models allowed for owner-billed trip chats; first is the default. */
+export const HIVE_MODELS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
 
 // Derive a chat title from the first user message — first non-empty line,
 // trimmed to ~50 chars with an ellipsis.
@@ -173,7 +175,12 @@ export function registerAiChatRoutes(
     if (content.length > MAX_USER_CONTENT_LENGTH) {
       return c.json({ error: `content exceeds ${MAX_USER_CONTENT_LENGTH} chars` }, 413)
     }
-    const selectedModel = resolveDeepSpaceAgentModel(modelId, 'application')
+    // TripHive: owner-billed trip chats run on Sonnet/Haiku only. Opus 402s on
+    // the free tier (its max-output reservation exceeds the per-request cap),
+    // and Sonnet is the better cost/latency fit for a tool-heavy planner.
+    const effectiveModelId =
+      typeof tripId === 'string' && tripId && !HIVE_MODELS.includes(String(modelId)) ? HIVE_MODELS[0] : modelId
+    const selectedModel = resolveDeepSpaceAgentModel(effectiveModelId, 'application')
     if (!selectedModel) {
       // Name the valid ids: the caller has no other way to learn them here.
       const modelIds = listDeepSpaceAgentModels('application').map((model) => model.id)

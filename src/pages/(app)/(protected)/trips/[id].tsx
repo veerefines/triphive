@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { getUserColor, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
+import { getUserColor, listDeepSpaceAgentModels, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
 import { ArrowLeft, Bot, CloudSun, Copy, Mail, Map as MapIcon, SlidersHorizontal, Trash2, Users } from 'lucide-react'
 import { Badge, Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
@@ -12,6 +12,13 @@ import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
 
 type SideTab = 'hive' | 'proposals' | 'issues' | 'activity'
+
+// Mirrors HIVE_MODELS in src/ai/chat-routes.ts (the server enforces it).
+const HIVE_MODEL_IDS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
+const HIVE_MODELS = listDeepSpaceAgentModels('application')
+  .filter((m) => HIVE_MODEL_IDS.includes(m.id))
+  .sort((a, b) => HIVE_MODEL_IDS.indexOf(a.id) - HIVE_MODEL_IDS.indexOf(b.id))
+  .map((m) => ({ id: m.id, label: m.label, provider: m.providerLabel }))
 
 const HIVE_PROMPTS = [
   'Plan our first day around everyone’s preferences',
@@ -288,6 +295,7 @@ export default function TripPage() {
                   chatId={chatId}
                   userId={userId}
                   tripId={tripId}
+                  models={HIVE_MODELS}
                   compact
                   className="h-full"
                   emptyStatePrompts={HIVE_PROMPTS}

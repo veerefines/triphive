@@ -63,7 +63,7 @@ export function ItineraryDay({
             {index != null ? `Day ${index + 1}` : 'Outside trip dates'}
             <span className="ml-2 text-sm font-normal text-muted-foreground">{weekday(date, { month: 'short', day: 'numeric' })}</span>
           </p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[11px] text-muted-foreground">
             <span>
               {ordered.length} stop{ordered.length === 1 ? '' : 's'}
             </span>
@@ -92,7 +92,7 @@ export function ItineraryDay({
           return (
             <div key={s.id} className="relative">
               {leg && (
-                <p className="-ml-1 py-1.5 text-[11px] font-medium text-muted-foreground">
+                <p className="-ml-1 py-1.5 font-mono text-[11px] text-muted-foreground">
                   {leg.mode === 'walk' ? '🚶' : '🚇'} {leg.minutes} min · {leg.km} km
                 </p>
               )}
@@ -147,12 +147,12 @@ function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>;
         <div className="flex items-center gap-1.5">
           <p className="truncate font-semibold leading-snug">{d.title}</p>
           {d.source === 'ai' && (
-            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-honey-soft px-1.5 py-0.5 text-[10px] font-medium text-[#8a5a00]">
+            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-honey-soft px-1.5 py-0.5 text-[10px] font-medium text-[#8a3a14]">
               <Bot className="size-3" /> Hive
             </span>
           )}
         </div>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[11px] text-muted-foreground">
           <span>{meta.label}</span>
           {d.start && (
             <span className="flex items-center gap-1">
@@ -165,7 +165,7 @@ function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>;
           {!!d.outdoor && <span>· outdoor</span>}
         </p>
         {d.address && (
-          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 font-mono text-[11px] text-muted-foreground">
             <MapPin className="size-3 shrink-0" />
             <span className="truncate">{d.address.split(',').slice(0, 2).join(',')}</span>
           </p>

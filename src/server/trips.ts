@@ -139,7 +139,8 @@ export async function createTrip(
   if (!YMD.test(startDate) || !YMD.test(endDate) || endDate < startDate) throw new TripError('Invalid dates')
   if (tripDates(startDate, endDate).length > 21) throw new TripError('Trips are limited to 21 days')
 
-  const coords = await geocodeCity(tools, destination)
+  // OWM knows cities; fall back to OSM for regions/landmarks ("Meghalaya", "Amalfi Coast").
+  const coords = (await geocodeCity(tools, destination)) ?? (await geocodePlace(destination, undefined, 1).then((h) => (h[0] ? { lat: h[0].lat, lng: h[0].lng } : null)).catch(() => null))
   const tripId = `trip_${crypto.randomUUID().replace(/-/g, '').slice(0, 20)}`
   unwrap(
     await tools.create('trips', {
@@ -268,6 +269,16 @@ export async function geocodePlace(query: string, near?: { lat?: number; lng?: n
 export async function refreshWeather(tools: ActionTools, tripId: string) {
   const trip = await getTrip(tools, tripId)
   if (!trip) throw new TripError('Trip not found')
+  // Backfill coordinates for trips whose destination the city geocoder missed
+  // (before the forecast call, which can fail for region names).
+  if (typeof trip.data.lat !== 'number') {
+    const hit = (await geocodePlace(trip.data.destination, undefined, 1).catch(() => []))[0]
+    if (hit) {
+      await tools.update('trips', tripId, { lat: hit.lat, lng: hit.lng })
+      trip.data.lat = hit.lat
+      trip.data.lng = hit.lng
+    }
+  }
   const r = await tools.integration<Array<{ dt: number; temp: number; description: string }>>('openweathermap/forecast', {
     q: trip.data.destination,
     units: 'metric',

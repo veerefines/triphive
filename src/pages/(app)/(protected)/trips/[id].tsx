@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getUserColor, listDeepSpaceAgentModels, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
-import { ArrowLeft, Bot, CloudSun, Copy, Mail, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeft, Bot, CloudSun, Copy, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
 import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
@@ -141,12 +141,12 @@ export default function TripPage() {
           </Link>
           <div className="min-w-0 flex-1">
             <h1 className="font-display truncate text-3xl font-bold tracking-tight">{t.title}</h1>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full bg-card px-2.5 py-1 font-medium shadow-[var(--shadow-card)]">📍 {t.destination}</span>
-              <span className="rounded-full bg-card px-2.5 py-1 font-medium shadow-[var(--shadow-card)]">
+            <div className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+              <span className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1"><MapPin className="size-3 text-honey" /> {t.destination}</span>
+              <span className="rounded-full border border-border px-2.5 py-1">
                 {weekday(t.startDate, { month: 'short', day: 'numeric' })} – {weekday(t.endDate, { month: 'short', day: 'numeric' })}
               </span>
-              <span className="rounded-full bg-card px-2.5 py-1 font-medium shadow-[var(--shadow-card)]">
+              <span className="rounded-full border border-border px-2.5 py-1">
                 {dates.length} day{dates.length === 1 ? '' : 's'} · {members.length} traveler{members.length === 1 ? '' : 's'}
               </span>
               {issues.length > 0 && (
@@ -186,7 +186,7 @@ export default function TripPage() {
                 navigator.clipboard.writeText(t.inviteCode)
                 toast.success('Invite code copied', `Friends join at /trips with ${t.inviteCode}`)
               }}
-              className="flex items-center gap-2 rounded-full bg-honey-soft px-3.5 py-2 text-sm font-medium text-[#6b4500] transition hover:brightness-95"
+              className="flex items-center gap-2 rounded-full bg-honey-soft px-3.5 py-2 text-sm font-medium text-[#7a3412] transition hover:brightness-95"
               data-testid="invite-code"
               title="Copy invite code"
             >
@@ -225,11 +225,11 @@ export default function TripPage() {
                 onClick={() => selectDay(d)}
                 className={cn(
                   'flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition',
-                  mapDate === d ? 'border-foreground bg-foreground text-background' : 'border-border bg-card hover:border-foreground/40',
+                  mapDate === d ? 'border-foreground bg-foreground text-background' : 'border-border hover:border-foreground/40',
                 )}
               >
                 Day {i + 1}
-                <span className={cn('text-xs', mapDate === d ? 'opacity-70' : 'text-muted-foreground')}>{weekday(d, { weekday: 'short' })}</span>
+                <span className={cn('font-mono text-[11px]', mapDate === d ? 'opacity-70' : 'text-muted-foreground')}>{weekday(d, { weekday: 'short', day: 'numeric' })}</span>
                 {fc && <span className="text-xs">{fc.rain ? '🌧' : '☀️'}</span>}
               </button>
             )
@@ -328,7 +328,7 @@ export default function TripPage() {
                     localStorage.setItem(chatKey, id)
                   }}
                   header={
-                    <div className="mx-3 mt-3 flex gap-3 rounded-2xl bg-honey-soft p-3 text-xs text-[#6b4500]">
+                    <div className="mx-3 mt-3 flex gap-3 rounded-2xl bg-honey-soft p-3 text-xs text-[#7a3412]">
                       <span className="text-lg leading-none">🐝</span>
                       <p>
                         <b>Hive</b> researches places, checks weather & routes, and <b>suggests</b> changes. The group votes before anything lands.

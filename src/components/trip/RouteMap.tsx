@@ -82,7 +82,7 @@ export function RouteMap({ trip, stops, date, label }: { trip: Trip; stops: Reco
   }, [located, ordered, trip.lat, trip.lng])
 
   return (
-    <div className="relative h-full min-h-[360px] overflow-hidden rounded-3xl border border-border">
+    <div className="relative isolate z-0 h-full min-h-[360px] overflow-hidden rounded-3xl border border-border">
       <div ref={el} className="absolute inset-0" />
       <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-2xl bg-card/95 px-3.5 py-2 shadow-[var(--shadow-card-hover)] backdrop-blur">
         <p className="text-sm font-semibold">{label}</p>

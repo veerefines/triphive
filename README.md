@@ -37,6 +37,8 @@ TripHive lets a group of friends plan one trip together. Everyone edits the same
 | AI agent | `ai-chat` feature + `streamDeepSpaceAgent` with custom trip-scoped tools (`src/ai/trip-tools.ts`) | The agent runs server-side and is bound to one trip only after a membership check |
 | Web research | `exa/search` integration | Finds real places with source URLs, which appear on each proposal |
 | Weather + city geocoding | `openweathermap/forecast`, `openweathermap/geocoding` | Forecast per day drives the rain checks and the day chips |
+| Ratings (optional) | Google Places (New) Text Search, key via `npx deepspace secrets set GOOGLE_MAPS_API_KEY=…` | Real Google ratings + Maps links; server-side only, 100 lookups/user/day, falls back to OSM without a key |
+| Directions | Google Maps deep links (no key) | Per-leg "directions" and "Open day in Google Maps" — no directions API exists in the catalog |
 | Email | `email/send` | Itinerary email and rain alerts, one email per recipient |
 | Scheduled work | `CronRoom` (`src/cron.ts`, daily 07:00 UTC) | Weather watch; only the app owner can trigger or pause it |
 

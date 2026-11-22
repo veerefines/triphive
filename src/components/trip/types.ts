@@ -11,6 +11,7 @@ export type Trip = {
   lng?: number
   forecast?: Record<string, DayForecast> | null
   forecastAt?: string
+  visibility?: 'private' | 'public'
 }
 
 export type Stop = {

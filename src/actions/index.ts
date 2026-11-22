@@ -25,6 +25,17 @@ import {
   type StopData,
 } from '../server/trips'
 import { groupByDate } from '../lib/planCheck'
+import {
+  deleteSocial,
+  refreshListing,
+  requestToJoin,
+  respondToRequest,
+  saveProfile,
+  sendDm,
+  sendTripMessage,
+  setVisibility,
+  suggestStop,
+} from '../server/social'
 import { safeHref } from '../lib/safeUrl'
 
 /** Map thrown TripErrors to `{ success: false }`; let real bugs surface as 500. */
@@ -57,6 +68,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
     if (me.data.role === 'owner') throw new TripError('The owner cannot leave; delete the trip instead')
     await tools.remove('team_members', me.recordId)
     await logActivity(tools, tripId, userId, 'left the trip')
+    await refreshListing(tools, tripId)
     return { left: true }
   }),
 
@@ -99,6 +111,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const tripId = str(params.tripId)
     await requireMember(tools, tripId, userId)
     const issues = await runPlanCheck(tools, tripId)
+    await refreshListing(tools, tripId)
     return { count: issues.length }
   }),
 
@@ -137,6 +150,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
         if (!r.success || (r.data as { deleted: number }).deleted < 500) break
       }
     }
+    await deleteSocial(tools, tripId)
     await tools.deleteWhere('team_members', { teamId: tripId }, 500)
     await tools.remove('trips', tripId)
     return { deleted: true }
@@ -191,5 +205,13 @@ export const actions: Record<string, ActionHandler<Env>> = {
       members: members.map((m) => ({ userId: m.data.userId, role: m.data.role, name: names[m.data.userId]?.name ?? 'Traveler' })),
     }
   }),
-}
 
+  // ── Social layer (src/server/social.ts) ──
+  saveProfile: safe(({ tools, userId, params }) => saveProfile(tools, userId, params)),
+  setVisibility: safe(({ tools, userId, params }) => setVisibility(tools, userId, params)),
+  requestToJoin: safe(({ tools, userId, params }) => requestToJoin(tools, userId, params)),
+  respondToRequest: safe(({ tools, userId, params }) => respondToRequest(tools, userId, params)),
+  sendDm: safe(({ tools, userId, params }) => sendDm(tools, userId, params)),
+  sendTripMessage: safe(({ tools, userId, params }) => sendTripMessage(tools, userId, params)),
+  suggestStop: safe(({ tools, userId, params }) => suggestStop(tools, userId, params)),
+}

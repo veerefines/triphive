@@ -34,6 +34,8 @@ export const tripsSchema: CollectionSchema = {
     { name: 'forecast', storage: 'text', interpretation: { kind: 'json' } },
     { name: 'forecastAt', storage: 'text', interpretation: 'plain' },
     { name: 'coverUrl', storage: 'text', interpretation: 'plain' },
+    // 'public' = advertised on Discover via a public_trips listing (server-written).
+    { name: 'visibility', storage: 'text', interpretation: { kind: 'select', options: ['private', 'public'] } },
   ],
   uniqueOn: ['inviteCode'],
   teamField: 'teamId',

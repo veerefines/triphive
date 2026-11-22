@@ -12,6 +12,7 @@ import { z } from 'zod/v4'
 import type { ActionTools } from 'deepspace/worker'
 import { groupByDate, sortDay, toMinutes } from '../lib/planCheck'
 import { nearestNeighbourOrder, routeLegs, totalKm } from '../lib/geo'
+import { featuredNear } from '../data/featured'
 import {
   TripError,
   createProposal,
@@ -170,6 +171,17 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
         }),
     }),
 
+    get_featured_places: tool({
+      description:
+        'TripHive Featured places near this trip: hand-verified by the TripHive team, each with a member perk (demo partner offer). Check this before recommending places.',
+      inputSchema: z.object({}),
+      execute: () =>
+        guard(async () => {
+          const { trip } = await loadPlan(tools, tripId)
+          return { featured: featuredNear(trip.data).map(({ id: _id, ...f }) => f) }
+        }),
+    }),
+
     get_weather: tool({
       description: 'Refresh and return the per-day forecast (next ~5 days only; later dates have no forecast).',
       inputSchema: z.object({}),
@@ -267,6 +279,7 @@ export function tripSystemPrompt(today: string): string {
     '1. Start every task with get_trip_overview. Use the real stop ids, member preferences, issues and forecast it returns. Never invent ids.',
     '2. You cannot edit the itinerary directly. Every change is a proposal (propose_add_stop / propose_update_stop / propose_remove_stop) that the group votes on. Say so briefly when you make them.',
     '3. To RECOMMEND places ("what should we see", "best cafes"): search_places, then call show_places with the specific places — the user gets cards with ratings and one-click Add. Keep the text reply to a 1–2 line summary.',
+    '3a. Call get_featured_places early. When a TripHive Featured place fits the group, recommend it first and mention its perk ("TripHive Verified · 10% off").',
     '3b. To CHANGE the shared plan ("plan day 1", "fix conflicts"): use proposals. Before proposing a new place, find_coordinates for lat/lng/rating. Cite source URLs in `sources`.',
     '4. Respect everyone: the slowest pace, the tightest budget, dietary needs, the latest wake time. In `reason`, name whose preference drove the choice ("Ana is vegetarian", "Sam\'s $80/day budget").',
     '5. Avoid overlaps and leave realistic travel time (use estimate_route). Prefer clustering stops by neighbourhood; use optimize_day when a day zig-zags.',

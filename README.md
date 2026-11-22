@@ -26,6 +26,33 @@ TripHive lets a group of friends plan one trip together. Everyone edits the same
 7. The group votes 👍/👎. A majority applies the change, and the organizer can approve it immediately.
 8. Email the itinerary to the group. Each morning a cron job refreshes the forecast and emails the group if a new rain conflict appears.
 
+## Social layer: find your people
+
+TripHive is also a place to meet travelers going the same way.
+
+- **Private or Public trips.** The organizer can list a trip on **Discover** with a pitch, vibe tags and a number of open spots.
+- **Ask to join.** Another traveler sends a short pitch. It reaches the organizer as a **chat request** in the **Inbox**, together with the requester's profile (bio, home city, travel style, interests).
+  - The organizer can **Accept** or **Decline**.
+  - The requester's composer stays locked until the organizer accepts. Accepting adds them to the trip, unlocks the chat for both sides and opens the full plan.
+- **Members can suggest.** New members can suggest places, and each suggestion becomes a proposal the group votes on. Every trip also has a **group chat** tab.
+- **Travel-buddy matching.** Discover and each trip's Explore tab show public trips in the same area (within 60 km, or the same city name) whose dates fall within **±5 days** of yours.
+  - This is useful for solo travelers looking for a group.
+  - The matcher is `src/lib/match.ts`; it is pure and unit-tested.
+- **TripHive Featured.** A curated list of verified places with member perks (`src/data/featured.ts`).
+  - Shown on Discover, on public trip pages and in the trip's Explore tab ("Suggest to group").
+  - Hive also checks it first through a `get_featured_places` tool.
+  - **The perks are demo offers.** No real partnerships exist, and the UI labels each one "Demo offer".
+
+**How privacy works:**
+- Strangers never get read access to `trips` or `stops`. A public trip is advertised through a separate `public_trips` *listing snapshot* that the server writes. The snapshot holds the title, dates, pitch, vibe tags and the first few stop titles per day. It never holds the invite code, times, prefs or member ids. The snapshot is rebuilt on publish, on accept or leave, and after every Plan Doctor run.
+- `join_requests` and `dm_messages` use a `collaboratorsField` (`participants = [requester, organizer]`), so only those two people can read a request thread.
+- Group chat is `'team'`.
+- All social writes go through server actions that check the caller's role.
+- Limits:
+  - at most 20 join requests per user per day
+  - one active request per trip
+  - message length caps
+
 ## DeepSpace primitives and integrations
 
 | Need | What I used | Why |
@@ -41,6 +68,7 @@ TripHive lets a group of friends plan one trip together. Everyone edits the same
 | Directions | Google Maps deep links (no key) | Per-leg "directions" and "Open day in Google Maps" — no directions API exists in the catalog |
 | Email | `email/send` | Itinerary email and rain alerts, one email per recipient |
 | Scheduled work | `CronRoom` (`src/cron.ts`, daily 07:00 UTC) | Weather watch; only the app owner can trigger or pause it |
+| Social privacy | `collaboratorsField` RBAC on `join_requests` / `dm_messages`, `'team'` on `trip_messages`, server-written `public_trips` | Request threads are readable only by the two participants; public listings expose no private plan data |
 
 Not from DeepSpace: **OpenStreetMap** (Nominatim for place geocoding, map tiles through Leaflet). The DeepSpace Google Maps endpoint (`serpapi/places-search`) returned `"Your account has run out of searches."` during development, and OWM geocoding only resolves cities.
 
@@ -88,7 +116,14 @@ I directed a coding agent (Claude Code) through the whole build.
 **Known residual:** the per-user caps (Hive messages, Google lookups) are read-then-write on a server-only counter, so exactly simultaneous requests from one user can overshoot by the number in flight. A per-user Durable Object counter with an atomic increment would close this.
 
 **Automated verification:**
-- `npx vitest run src/lib`: 18 Plan Doctor and geo unit tests.
+- `npx vitest run src/lib`: 27 unit tests covering Plan Doctor, geo, safe URLs and travel-buddy matching.
+- `npx deepspace test run tests/social.spec.ts`: two real accounts.
+  - A publishes a trip.
+  - B still **cannot** open it by URL.
+  - B finds it on Discover as a ±5-day match and sends a pitch. B's chat is locked.
+  - A accepts from the Inbox (with the badge showing).
+  - Chat unlocks both ways, and B opens the trip.
+  - B suggests a Featured place, which lands in A's Votes, and the group chat works.
 - `npx deepspace test run tests/triphive.spec.ts`: two real accounts. A creates a trip, B **cannot** see it by URL, B joins by code, A's stops appear live for B, and an overlap produces a Plan Doctor issue that B sees.
 - A manual prod run of Hive: overview → Exa search → geocode → two proposals with sources → vote → the stop lands live.
 
@@ -100,6 +135,12 @@ I directed a coding agent (Claude Code) through the whole build.
 - Real transit routing. Travel times today are labelled "approx" (straight line × 1.3, by mode).
 - An atomic per-user AI counter (see the known residual above).
 - Google Calendar export, per-stop comments, and a shared budget split.
+- Social:
+  - real partner deals and an admin UI for Featured places (today it is a code-reviewed list)
+  - blocking and reporting users
+  - read receipts and unread counts per thread
+  - photo avatars
+  - map-based search on Discover
 
 ## Run it
 
@@ -120,3 +161,5 @@ Key files:
 - `src/actions/index.ts`: server actions
 - `src/cron.ts`: weather watch
 - `src/pages/(app)/(protected)/trips/`: UI
+- `src/schemas/social-schemas.ts`, `src/server/social.ts`: the social layer
+- `src/pages/(app)/(protected)/{discover,inbox,profile,people}`: Discover, Inbox and profiles

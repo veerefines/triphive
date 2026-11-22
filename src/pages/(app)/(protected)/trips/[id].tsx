@@ -8,11 +8,12 @@ import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
 import { ActivityFeed, IssuesPanel, PrefsModal, ProposalsPanel } from '@/components/trip/Panels'
 import { RouteMap } from '@/components/trip/RouteMap'
 import { TripChatContext } from '@/components/trip/PlaceCards'
+import { ExplorePanel, GroupChat, VisibilityChip, VisibilityModal } from '@/components/trip/Social'
 import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/components/trip/types'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
 
-type SideTab = 'hive' | 'proposals' | 'issues' | 'activity'
+type SideTab = 'hive' | 'chat' | 'proposals' | 'issues' | 'explore'
 
 // Mirrors HIVE_MODELS in src/ai/chat-routes.ts (the server enforces it).
 const HIVE_MODEL_IDS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
@@ -50,6 +51,7 @@ export default function TripPage() {
   const [mapDate, setMapDate] = useState<string>('')
   const [editing, setEditing] = useState<{ stop: RecordData<Stop> | null; date: string } | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
+  const [visOpen, setVisOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -176,6 +178,7 @@ export default function TripPage() {
               <span className="rounded-full border border-border px-2.5 py-1">
                 {dates.length} day{dates.length === 1 ? '' : 's'} · {members.length} traveler{members.length === 1 ? '' : 's'}
               </span>
+              <VisibilityChip visibility={t.visibility} isOwner={isOwner} onClick={() => setVisOpen(true)} />
               {issues.length > 0 && (
                 <button type="button" onClick={() => setSide('issues')} className="rounded-full bg-warning/15 px-2.5 py-1 font-medium text-[#92560a]">
                   ⚠ {issues.length} plan issue{issues.length === 1 ? '' : 's'}
@@ -359,9 +362,10 @@ export default function TripPage() {
             {(
               [
                 ['hive', 'Hive', null],
+                ['chat', 'Chat', null],
                 ['proposals', 'Votes', pendingCount],
                 ['issues', 'Issues', issues.length],
-                ['activity', 'Activity', null],
+                ['explore', 'Explore', null],
               ] as const
             ).map(([key, label, count]) => (
               <button
@@ -369,7 +373,7 @@ export default function TripPage() {
                 type="button"
                 onClick={() => setSide(key)}
                 className={cn(
-                  'flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 transition',
+                  'flex flex-1 items-center justify-center gap-1 rounded-full py-2 text-[13px] transition',
                   side === key ? 'bg-foreground font-semibold text-background' : 'text-muted-foreground hover:bg-muted',
                 )}
               >
@@ -425,11 +429,26 @@ export default function TripPage() {
                 }}
               />
             )}
-            {side === 'activity' && <ActivityFeed activity={activity} nameOf={nameOf} />}
+            {side === 'chat' && <GroupChat tripId={tripId} me={userId ?? ''} nameOf={nameOf} />}
+            {side === 'explore' && (
+              <>
+                <ExplorePanel
+                  tripId={tripId}
+                  trip={t}
+                  date={mapDate || dates[0]}
+                  dateLabel={`Day ${Math.max(1, dates.indexOf(mapDate) + 1)}`}
+                />
+                <div className="border-t border-border">
+                  <p className="px-4 pt-4 font-display text-lg font-semibold">Activity</p>
+                  <ActivityFeed activity={activity} nameOf={nameOf} />
+                </div>
+              </>
+            )}
           </div>
         </aside>
       </div>
 
+      {isOwner && <VisibilityModal open={visOpen} onClose={() => setVisOpen(false)} tripId={tripId} trip={t} />}
       <StopModal
         open={!!editing}
         tripId={tripId}

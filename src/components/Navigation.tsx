@@ -10,7 +10,7 @@
 
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { AuthOverlay, useAuthProfileReady, signOut } from 'deepspace'
+import { AuthOverlay, useAuth, useAuthProfileReady, useQuery, signOut } from 'deepspace'
 import { ChevronDown, LogOut, Menu, X } from 'lucide-react'
 import type { Role } from '../constants'
 import { nav } from '../nav'
@@ -62,6 +62,7 @@ export default function Navigation() {
         )}
       >
         {item.label}
+        {item.path === '/inbox' && isSignedIn && <InboxBadge />}
       </Link>
     )
   }
@@ -160,5 +161,17 @@ export default function Navigation() {
 
       {showAuthModal && <AuthOverlay onClose={() => setShowAuthModal(false)} />}
     </>
+  )
+}
+
+/** Pending join requests waiting on me (as trip organizer). */
+function InboxBadge() {
+  const { userId } = useAuth()
+  const { records } = useQuery<{ ownerId: string; status: string }>('join_requests', { where: { ownerId: userId ?? '', status: 'pending' } })
+  if (!records.length) return null
+  return (
+    <span data-testid="inbox-badge" className="ml-1.5 rounded-full bg-[var(--color-honey)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-white">
+      {records.length}
+    </span>
   )
 }

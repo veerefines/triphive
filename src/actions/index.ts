@@ -11,6 +11,7 @@ import {
   cleanStop,
   createTrip,
   findPlaces,
+  googleGate,
   getTrip,
   joinTrip,
   listMembers,
@@ -114,7 +115,8 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const { trip } = await requireMember(tools, tripId, userId)
     const query = str(params.query).trim().slice(0, 120)
     if (query.length < 2) return { places: [] }
-    return { places: await findPlaces(env.GOOGLE_MAPS_API_KEY, query, trip.data, 4) }
+    const key = await googleGate(tools, userId, env.GOOGLE_MAPS_API_KEY)()
+    return { places: await findPlaces(key, query, trip.data, 4) }
   }),
 
   vote: safe(({ tools, userId, params }) =>

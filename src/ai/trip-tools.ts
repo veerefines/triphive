@@ -16,6 +16,7 @@ import {
   TripError,
   createProposal,
   findPlaces,
+  googleGate,
   listMembers,
   loadPlan,
   logActivity,
@@ -61,6 +62,7 @@ async function guard<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
 }
 
 export function buildTripTools(tools: ActionTools, tripId: string, userId: string, googleKey?: string): ToolSet {
+  const google = googleGate(tools, userId, googleKey)
   return {
     get_trip_overview: tool({
       description:
@@ -116,7 +118,7 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
       execute: ({ place }) =>
         guard(async () => {
           const { trip } = await loadPlan(tools, tripId)
-          const hits = await findPlaces(googleKey, place, trip.data, 3)
+          const hits = await findPlaces(await google(), place, trip.data, 3)
           return hits.length ? { candidates: hits } : { error: 'No match; try a more specific name or skip coordinates.' }
         }),
     }),
@@ -148,8 +150,9 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
           // Sequential: OSM Nominatim allows 1 request/second.
           const enriched = []
           for (const [i, p] of places.entries()) {
-            if (i > 0 && !googleKey) await new Promise((r) => setTimeout(r, 1100))
-            const hit = (await findPlaces(googleKey, p.name, trip.data, 1).catch(() => []))[0]
+            const key = await google()
+            if (i > 0 && !key) await new Promise((r) => setTimeout(r, 1100))
+            const hit = (await findPlaces(key, p.name, trip.data, 1).catch(() => []))[0]
             enriched.push({
                 ...p,
                 lat: hit?.lat,

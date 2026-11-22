@@ -277,6 +277,30 @@ export async function geocodePlace(query: string, near?: { lat?: number; lng?: n
   }))
 }
 
+/** Google lookups per user per UTC day (owner-billed). */
+export const GOOGLE_DAILY_LOOKUPS = 100
+
+/**
+ * Returns a function that hands out the Google key for ONE lookup, reserving a
+ * unit in the server-only ai_usage counter (bucket "places:<day>"). Past the
+ * cap, or with no key configured, it returns undefined → OSM fallback.
+ */
+export function googleGate(tools: ActionTools, userId: string, key: string | undefined) {
+  return async (): Promise<string | undefined> => {
+    if (!key) return undefined
+    const day = `places:${new Date().toISOString().slice(0, 10)}`
+    const r = await tools.query<{ count: number }>('ai_usage', { where: { userId, day }, limit: 1 })
+    if (!r.success) return undefined
+    const row = r.data.records[0]
+    const used = Number(row?.data.count ?? 0)
+    if (used >= GOOGLE_DAILY_LOOKUPS) return undefined
+    const ok = row
+      ? await tools.update('ai_usage', row.recordId, { count: used + 1 })
+      : await tools.create('ai_usage', { userId, day, count: 1 })
+    return ok.success ? key : undefined
+  }
+}
+
 /**
  * Best available place lookup: Google Places (ratings, Maps link) when the
  * owner configured GOOGLE_MAPS_API_KEY, otherwise OpenStreetMap — first
@@ -290,10 +314,17 @@ export async function findPlaces(
 ): Promise<PlaceHit[]> {
   const g = await googlePlacesSearch(googleKey, `${query}, ${trip.destination}`, trip, limit).catch(() => null)
   if (g && g.length) return g.map((p) => ({ ...p, kind: p.kind ?? '', source: 'google' as const }))
-  let hits = await geocodePlace(query, trip, limit).catch(() => [])
-  if (!hits.length) {
-    await new Promise((r) => setTimeout(r, 1100)) // Nominatim: 1 req/s
-    hits = await geocodePlace(`${query}, ${trip.destination}`, undefined, limit).catch(() => [])
+  // Nominatim's free-text search is literal: "Ward's Lake, Shillong" finds
+  // nothing while "Wards Lake" does. Try a few cleaned variants, biased to the
+  // trip area, 1 request/second (usage policy), stopping at the first hit.
+  const clean = (q: string) => q.replace(/['’`]/g, '').replace(/\s+/g, ' ').trim()
+  const head = clean(query.split(',')[0])
+  const variants = [...new Set([clean(query), head, `${head} ${trip.destination}`])].filter((v) => v.length >= 2)
+  let hits: PlaceHit[] = []
+  for (const [i, v] of variants.entries()) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1100))
+    hits = await geocodePlace(v, trip, limit).catch(() => [])
+    if (hits.length) break
   }
   return hits.map((h) => ({ ...h, source: 'osm' as const }))
 }

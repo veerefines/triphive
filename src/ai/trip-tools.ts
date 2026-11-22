@@ -145,10 +145,12 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
       execute: ({ places }) =>
         guard(async () => {
           const { trip } = await loadPlan(tools, tripId)
-          const enriched = await Promise.all(
-            places.map(async (p) => {
-              const hit = (await findPlaces(googleKey, p.name, trip.data, 1).catch(() => []))[0]
-              return {
+          // Sequential: OSM Nominatim allows 1 request/second.
+          const enriched = []
+          for (const [i, p] of places.entries()) {
+            if (i > 0 && !googleKey) await new Promise((r) => setTimeout(r, 1100))
+            const hit = (await findPlaces(googleKey, p.name, trip.data, 1).catch(() => []))[0]
+            enriched.push({
                 ...p,
                 lat: hit?.lat,
                 lng: hit?.lng,
@@ -158,9 +160,8 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
                 mapsUrl: hit?.mapsUrl,
                 openNow: hit?.openNow,
                 located: !!hit,
-              }
-            }),
-          )
+            })
+          }
           return { places: enriched, note: 'Rendered as cards with an Add button. Keep your text reply short; do not repeat every place.' }
         }),
     }),

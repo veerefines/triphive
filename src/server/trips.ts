@@ -250,7 +250,8 @@ export interface PlaceHit {
  * POI geocoding via OpenStreetMap Nominatim (free, keyless). The DeepSpace
  * catalog's Google Maps endpoint (serpapi/places-search) returned an upstream
  * quota error during development, and OWM geocoding is city-level only.
- * Results are biased to a ~25 km box around the trip destination.
+ * Results are biased (not bounded) to the area around the trip destination.
+ * Nominatim's usage policy is max 1 request/second — callers geocode sequentially.
  */
 export async function geocodePlace(query: string, near?: { lat?: number; lng?: number }, limit = 3): Promise<PlaceHit[]> {
   const url = new URL('https://nominatim.openstreetmap.org/search')
@@ -258,9 +259,11 @@ export async function geocodePlace(query: string, near?: { lat?: number; lng?: n
   url.searchParams.set('format', 'jsonv2')
   url.searchParams.set('limit', String(Math.min(5, Math.max(1, limit))))
   if (typeof near?.lat === 'number' && typeof near?.lng === 'number') {
-    const d = 0.25
+    // Prefer (not require) results near the trip: regions like "Meghalaya"
+    // span far more than a city box.
+    const d = 0.6
     url.searchParams.set('viewbox', `${near.lng - d},${near.lat + d},${near.lng + d},${near.lat - d}`)
-    url.searchParams.set('bounded', '1')
+    url.searchParams.set('bounded', '0')
   }
   const res = await fetch(url, { headers: { 'User-Agent': 'TripHive/1.0 (DeepSpace demo app)', 'Accept-Language': 'en' } })
   if (!res.ok) return []
@@ -288,7 +291,10 @@ export async function findPlaces(
   const g = await googlePlacesSearch(googleKey, `${query}, ${trip.destination}`, trip, limit).catch(() => null)
   if (g && g.length) return g.map((p) => ({ ...p, kind: p.kind ?? '', source: 'google' as const }))
   let hits = await geocodePlace(query, trip, limit).catch(() => [])
-  if (!hits.length) hits = await geocodePlace(`${query}, ${trip.destination}`, undefined, limit).catch(() => [])
+  if (!hits.length) {
+    await new Promise((r) => setTimeout(r, 1100)) // Nominatim: 1 req/s
+    hits = await geocodePlace(`${query}, ${trip.destination}`, undefined, limit).catch(() => [])
+  }
   return hits.map((h) => ({ ...h, source: 'osm' as const }))
 }
 

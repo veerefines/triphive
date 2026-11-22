@@ -212,7 +212,7 @@ function ToolRow({ invocation }: { invocation: ToolInvocation }) {
             ? <FailDot />
             : <Check className="h-3 w-3 shrink-0 text-foreground/60" aria-hidden="true" />}
       </span>
-      <span className={done ? 'text-muted-foreground' : 'text-foreground'}>{label}</span>
+      <span className={`shrink-0 whitespace-nowrap ${done ? 'text-muted-foreground' : 'text-foreground'}`}>{label}</span>
       {path && (
         <code className="truncate font-mono text-[12.5px] text-foreground/70">{path}</code>
       )}

@@ -45,31 +45,33 @@
   --color-shell-panel: #ffffff;
 }
 
-/* Honey — TripHive's own theme: warm paper, honey-amber primary, ink text. */
+/* Honey — TripHive: warm cream paper, ink primary (pill buttons), honey accents. */
 [data-theme="honey"] {
   color-scheme: light;
-  --color-background: #fbf7ef;
-  --color-foreground: #1f1a12;
+  --color-background: #f6f2ea;
+  --color-foreground: #1c1814;
   --color-card: #ffffff;
-  --color-card-foreground: #1f1a12;
+  --color-card-foreground: #1c1814;
   --color-popover: #ffffff;
-  --color-popover-foreground: #1f1a12;
-  --color-primary: #d97706;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #f3ead8;
-  --color-secondary-foreground: #3b2f1c;
-  --color-muted: #f3ecdf;
-  --color-muted-foreground: #74674f;
-  --color-accent: #fdecc8;
-  --color-accent-foreground: #3b2f1c;
+  --color-popover-foreground: #1c1814;
+  --color-primary: #1c1814;
+  --color-primary-foreground: #fbf8f2;
+  --color-secondary: #ede6d8;
+  --color-secondary-foreground: #1c1814;
+  --color-muted: #efe9dd;
+  --color-muted-foreground: #7a6f5f;
+  --color-accent: #f1e8d6;
+  --color-accent-foreground: #1c1814;
   --color-destructive: #c2410c;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e8dcc4;
-  --color-input: #e2d4b8;
-  --color-ring: #d97706;
-  --radius: 0.75rem;
-  --shadow-card: 0 1px 2px 0 rgba(80, 55, 10, 0.06);
-  --shadow-card-hover: 0 4px 14px 0 rgba(80, 55, 10, 0.1);
-  --color-shell: #f5eedf;
-  --color-shell-panel: #fffdf8;
+  --color-border: #e6dccb;
+  --color-input: #ddd2bf;
+  --color-ring: #e09a1a;
+  --radius: 0.9rem;
+  --shadow-card: 0 1px 2px 0 rgba(60, 40, 10, 0.05);
+  --shadow-card-hover: 0 8px 24px -6px rgba(60, 40, 10, 0.14);
+  --color-shell: #efe8db;
+  --color-shell-panel: #fbf8f2;
+  --color-honey: #e09a1a;
+  --color-honey-soft: #fbedd0;
 }

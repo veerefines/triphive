@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getUserColor, listDeepSpaceAgentModels, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
-import { ArrowLeft, Bot, CloudSun, Copy, Mail, Map as MapIcon, SlidersHorizontal, Trash2, Users } from 'lucide-react'
-import { Badge, Button, ConfirmModal, cn, useToast } from '@/components/ui'
+import { ArrowLeft, Bot, CloudSun, Copy, Mail, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
+import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
-import { DayColumn, StopModal } from '@/components/trip/Board'
+import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
 import { ActivityFeed, IssuesPanel, PrefsModal, ProposalsPanel } from '@/components/trip/Panels'
 import { RouteMap } from '@/components/trip/RouteMap'
 import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/components/trip/types'
@@ -46,7 +46,6 @@ export default function TripPage() {
   const { peers, updateState } = usePresenceRoom(`trip:${tripId}`)
 
   const [side, setSide] = useState<SideTab>('hive')
-  const [view, setView] = useState<'board' | 'map'>('board')
   const [mapDate, setMapDate] = useState<string>('')
   const [editing, setEditing] = useState<{ stop: RecordData<Stop> | null; date: string } | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -121,74 +120,90 @@ export default function TripPage() {
     scheduleRecheck()
   }
 
+  const outside = [...new Set(stops.filter((s) => !dates.includes(s.data.date)).map((s) => s.data.date))].sort()
+  const selectDay = (d: string) => {
+    setMapDate(d)
+    document.getElementById(`day-${d}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const mapIndex = dates.indexOf(mapDate)
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="border-b border-border bg-[var(--color-shell)] px-6 py-4">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <Link to="/trips" className="text-muted-foreground hover:text-foreground" aria-label="All trips">
-            <ArrowLeft className="size-5" />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="font-display truncate text-2xl font-bold">{t.title}</h1>
-            <p className="text-sm text-muted-foreground">
-              {t.destination} · {t.startDate} → {t.endDate} · {dates.length} day{dates.length === 1 ? '' : 's'}
-            </p>
-          </div>
-
-          <div className="flex items-center -space-x-2" aria-label="Travelers">
-            {members.map((m) => {
-              const u = users.find((x) => x.id === m.data.userId)
-              const online = m.data.userId === userId || onlineIds.has(m.data.userId)
-              const hasPrefs = prefs.some((p) => p.data.userId === m.data.userId)
-              return (
-                <div
-                  key={m.recordId}
-                  title={`${nameOf(m.data.userId)}${m.data.role === 'owner' ? ' (organizer)' : ''}${online ? ' · online' : ''}${hasPrefs ? '' : ' · no preferences yet'}`}
-                  className={cn('relative size-9 rounded-full border-2 border-background text-xs font-semibold text-white', !online && 'opacity-50')}
-                  style={{ background: getUserColor(m.data.userId) }}
-                >
-                  {u?.imageUrl ? (
-                    <img src={u.imageUrl} alt="" className="size-full rounded-full object-cover" />
-                  ) : (
-                    <span className="flex size-full items-center justify-center">{(u?.name ?? '?').slice(0, 1).toUpperCase()}</span>
-                  )}
-                  {online && <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background bg-success" />}
-                </div>
-              )
-            })}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(t.inviteCode)
-              toast.success('Invite code copied', `Friends join at /trips with ${t.inviteCode}`)
-            }}
-            className="flex items-center gap-2 rounded-full border border-dashed border-primary/60 px-3 py-1.5 font-mono text-sm tracking-[0.2em] text-primary hover:bg-accent"
-            data-testid="invite-code"
+      <header className="px-6 pb-3 pt-5">
+        <div className="flex flex-wrap items-start gap-x-5 gap-y-3">
+          <Link
+            to="/trips"
+            className="mt-1 flex size-10 items-center justify-center rounded-full bg-card shadow-[var(--shadow-card)] transition hover:shadow-[var(--shadow-card-hover)]"
+            aria-label="All trips"
           >
-            <Users className="size-4" /> {t.inviteCode} <Copy className="size-3.5" />
-          </button>
+            <ArrowLeft className="size-4" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display truncate text-3xl font-bold tracking-tight">{t.title}</h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-card px-2.5 py-1 font-medium shadow-[var(--shadow-card)]">📍 {t.destination}</span>
+              <span className="rounded-full bg-card px-2.5 py-1 font-medium shadow-[var(--shadow-card)]">
+                {weekday(t.startDate, { month: 'short', day: 'numeric' })} – {weekday(t.endDate, { month: 'short', day: 'numeric' })}
+              </span>
+              <span className="rounded-full bg-card px-2.5 py-1 font-medium shadow-[var(--shadow-card)]">
+                {dates.length} day{dates.length === 1 ? '' : 's'} · {members.length} traveler{members.length === 1 ? '' : 's'}
+              </span>
+              {issues.length > 0 && (
+                <button type="button" onClick={() => setSide('issues')} className="rounded-full bg-warning/15 px-2.5 py-1 font-medium text-[#92560a]">
+                  ⚠ {issues.length} plan issue{issues.length === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
+          </div>
 
-          <div className="ml-auto flex flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center -space-x-2" aria-label="Travelers">
+              {members.map((m) => {
+                const u = users.find((x) => x.id === m.data.userId)
+                const online = m.data.userId === userId || onlineIds.has(m.data.userId)
+                const hasPrefs = prefs.some((p) => p.data.userId === m.data.userId)
+                return (
+                  <div
+                    key={m.recordId}
+                    title={`${nameOf(m.data.userId)}${m.data.role === 'owner' ? ' (organizer)' : ''}${online ? ' · online' : ''}${hasPrefs ? '' : ' · no preferences yet'}`}
+                    className={cn('relative size-9 rounded-full border-2 border-background text-xs font-semibold text-white', !online && 'opacity-60')}
+                    style={{ background: getUserColor(m.data.userId) }}
+                  >
+                    {u?.imageUrl ? (
+                      <img src={u.imageUrl} alt="" className="size-full rounded-full object-cover" />
+                    ) : (
+                      <span className="flex size-full items-center justify-center">{(u?.name ?? '?').slice(0, 1).toUpperCase()}</span>
+                    )}
+                    {online && <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background bg-success" />}
+                  </div>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(t.inviteCode)
+                toast.success('Invite code copied', `Friends join at /trips with ${t.inviteCode}`)
+              }}
+              className="flex items-center gap-2 rounded-full bg-honey-soft px-3.5 py-2 text-sm font-medium text-[#6b4500] transition hover:brightness-95"
+              data-testid="invite-code"
+              title="Copy invite code"
+            >
+              <UserPlus className="size-4" />
+              <span className="font-mono tracking-[0.18em]">{t.inviteCode}</span>
+              <Copy className="size-3.5 opacity-70" />
+            </button>
+          </div>
+
+          <div className="flex w-full flex-wrap gap-2 xl:ml-auto xl:w-auto">
             <Button size="sm" variant={myPrefs ? 'outline' : 'default'} onClick={() => setPrefsOpen(true)}>
               <SlidersHorizontal /> {myPrefs ? 'My style' : 'Set my style'}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              loading={busy === 'Weather'}
-              onClick={() => run('Weather', () => callAction('refreshWeather', { tripId }), 'Forecast updated')}
-            >
+            <Button size="sm" variant="outline" loading={busy === 'Weather'} onClick={() => run('Weather', () => callAction('refreshWeather', { tripId }), 'Forecast updated')}>
               <CloudSun /> Weather
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              loading={busy === 'Email'}
-              onClick={() => run('Email', () => callAction('emailItinerary', { tripId }), 'Itinerary emailed to the group')}
-            >
+            <Button size="sm" variant="outline" loading={busy === 'Email'} onClick={() => run('Email', () => callAction('emailItinerary', { tripId }), 'Itinerary emailed to the group')}>
               <Mail /> Email plan
             </Button>
             {isOwner && (
@@ -198,75 +213,77 @@ export default function TripPage() {
             )}
           </div>
         </div>
+
+        {/* Day chips */}
+        <div className="scrollbar-none -mx-1 mt-4 flex gap-2 overflow-x-auto px-1">
+          {dates.map((d, i) => {
+            const fc = t.forecast?.[d]
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => selectDay(d)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition',
+                  mapDate === d ? 'border-foreground bg-foreground text-background' : 'border-border bg-card hover:border-foreground/40',
+                )}
+              >
+                Day {i + 1}
+                <span className={cn('text-xs', mapDate === d ? 'opacity-70' : 'text-muted-foreground')}>{weekday(d, { weekday: 'short' })}</span>
+                {fc && <span className="text-xs">{fc.rain ? '🌧' : '☀️'}</span>}
+              </button>
+            )
+          })}
+        </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        {/* Main: board or map */}
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-2 px-6 pt-4">
-            <div className="inline-flex rounded-full border border-border bg-card p-1 text-sm">
-              {(['board', 'map'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setView(v)}
-                  className={cn('flex items-center gap-1.5 rounded-full px-3 py-1 capitalize', view === v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}
-                >
-                  {v === 'map' && <MapIcon className="size-3.5" />}
-                  {v}
-                </button>
-              ))}
-            </div>
-            {view === 'map' && (
-              <select className="h-8 rounded-full border border-input bg-card px-3 text-sm" value={mapDate} onChange={(e) => setMapDate(e.target.value)} aria-label="Day">
-                {dates.map((d) => (
-                  <option key={d}>{d}</option>
-                ))}
-              </select>
-            )}
-            {issues.length > 0 && (
-              <button type="button" onClick={() => setSide('issues')} className="ml-auto">
-                <Badge variant="warning">{issues.length} plan issue{issues.length === 1 ? '' : 's'}</Badge>
-              </button>
-            )}
-          </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pb-6 lg:flex-row">
+        {/* Itinerary */}
+        <section className="scrollbar-none min-h-0 w-full shrink-0 space-y-8 overflow-y-auto lg:w-[420px]" aria-label="Itinerary">
+          {dates.map((d, i) => (
+            <ItineraryDay
+              key={d}
+              date={d}
+              index={i}
+              trip={t}
+              stops={stops.filter((s) => s.data.date === d)}
+              issues={issues}
+              peers={peers}
+              canWrite={stopMut.ready}
+              selected={mapDate === d}
+              onSelect={() => setMapDate(d)}
+              onAdd={(date) => setEditing({ stop: null, date })}
+              onEdit={(stop) => setEditing({ stop, date: stop.data.date })}
+            />
+          ))}
+          {outside.map((d) => (
+            <ItineraryDay
+              key={d}
+              date={d}
+              index={null}
+              trip={t}
+              stops={stops.filter((s) => s.data.date === d)}
+              issues={issues}
+              peers={peers}
+              canWrite={stopMut.ready}
+              selected={false}
+              onSelect={() => undefined}
+              onAdd={() => undefined}
+              onEdit={(stop) => setEditing({ stop, date: stop.data.date })}
+            />
+          ))}
+        </section>
 
-          {view === 'board' ? (
-            <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto p-6">
-              {dates.map((d) => (
-                <DayColumn
-                  key={d}
-                  date={d}
-                  trip={t}
-                  stops={stops.filter((s) => s.data.date === d)}
-                  issues={issues}
-                  peers={peers}
-                  canWrite={stopMut.ready}
-                  onAdd={(date) => setEditing({ stop: null, date })}
-                  onEdit={(stop) => setEditing({ stop, date: stop.data.date })}
-                />
-              ))}
-              {stops.some((s) => !dates.includes(s.data.date)) && (
-                <DayColumn
-                  date={stops.find((s) => !dates.includes(s.data.date))!.data.date}
-                  trip={t}
-                  stops={stops.filter((s) => !dates.includes(s.data.date))}
-                  issues={issues}
-                  peers={peers}
-                  canWrite={stopMut.ready}
-                  onAdd={() => undefined}
-                  onEdit={(stop) => setEditing({ stop, date: stop.data.date })}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">{mapDate && <RouteMap trip={t} stops={stops} date={mapDate} />}</div>
+        {/* Map */}
+        <section className="hidden min-h-0 min-w-0 flex-1 lg:block" aria-label="Map">
+          {mapDate && (
+            <RouteMap trip={t} stops={stops} date={mapDate} label={`Day ${mapIndex + 1} · ${weekday(mapDate, { weekday: 'long', month: 'short', day: 'numeric' })}`} />
           )}
         </section>
 
         {/* Side panel */}
-        <aside className="flex min-h-[480px] w-full shrink-0 flex-col border-t border-border bg-card lg:w-[400px] lg:border-l lg:border-t-0">
-          <div className="flex border-b border-border text-sm">
+        <aside className="flex min-h-[520px] w-full shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-[var(--shadow-card)] lg:w-[380px]">
+          <div className="flex gap-1 border-b border-border p-1.5 text-sm">
             {(
               [
                 ['hive', 'Hive', null],
@@ -279,11 +296,16 @@ export default function TripPage() {
                 key={key}
                 type="button"
                 onClick={() => setSide(key)}
-                className={cn('flex flex-1 items-center justify-center gap-1.5 py-3', side === key ? 'border-b-2 border-primary font-semibold text-foreground' : 'text-muted-foreground')}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 transition',
+                  side === key ? 'bg-foreground font-semibold text-background' : 'text-muted-foreground hover:bg-muted',
+                )}
               >
                 {key === 'hive' && <Bot className="size-4" />}
                 {label}
-                {!!count && <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{count}</span>}
+                {!!count && (
+                  <span className={cn('rounded-full px-1.5 text-[10px] font-semibold', side === key ? 'bg-background/20' : 'bg-honey text-white')}>{count}</span>
+                )}
               </button>
             ))}
           </div>
@@ -306,16 +328,17 @@ export default function TripPage() {
                     localStorage.setItem(chatKey, id)
                   }}
                   header={
-                    <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-                      Hive researches places, checks weather & routes, and <b>suggests</b> changes — the group votes before anything lands.
-                    </p>
+                    <div className="mx-3 mt-3 flex gap-3 rounded-2xl bg-honey-soft p-3 text-xs text-[#6b4500]">
+                      <span className="text-lg leading-none">🐝</span>
+                      <p>
+                        <b>Hive</b> researches places, checks weather & routes, and <b>suggests</b> changes. The group votes before anything lands.
+                      </p>
+                    </div>
                   }
                 />
               )}
             </div>
-            {side === 'proposals' && (
-              <ProposalsPanel proposals={proposals} stops={stops} members={members} me={userId ?? ''} isOwner={isOwner} nameOf={nameOf} />
-            )}
+            {side === 'proposals' && <ProposalsPanel proposals={proposals} stops={stops} members={members} me={userId ?? ''} isOwner={isOwner} nameOf={nameOf} />}
             {side === 'issues' && (
               <IssuesPanel
                 issues={issues}

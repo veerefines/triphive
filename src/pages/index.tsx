@@ -45,7 +45,7 @@ export default function Landing() {
             Group trip planning, minus the group-chat chaos
           </p>
           <h1 className="font-display max-w-3xl text-5xl font-bold leading-[1.05] sm:text-6xl">
-            Plan the trip <span className="text-primary">together</span>. Let Hive keep it realistic.
+            Plan the trip <span className="text-honey italic">together</span>. Let Hive keep it realistic.
           </h1>
           <p className="mt-6 max-w-xl text-lg text-muted-foreground">
             A shared, real-time itinerary for friends — with an AI planner that finds places, spots conflicts,
@@ -64,6 +64,18 @@ export default function Landing() {
             >
               I have an invite code
             </Link>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6 pb-16">
+          <div className="overflow-hidden rounded-[28px] border border-border bg-card p-2 shadow-[0_30px_80px_-30px_rgba(60,40,10,0.35)]">
+            <img
+              src="/product.jpg"
+              alt="TripHive trip page: a day-by-day itinerary with travel times, a route map, and Hive's planning panel"
+              width={1440}
+              height={900}
+              className="w-full rounded-[22px]"
+            />
           </div>
         </section>
 

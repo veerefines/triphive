@@ -82,10 +82,10 @@ export function EmptyState({
     <div className="mx-auto flex h-full max-w-[28rem] flex-col items-start justify-center gap-4 px-2">
       <div className="space-y-1">
         <h2 className="text-[17px] font-medium tracking-tight text-foreground">
-          How can I help?
+          Where should we start?
         </h2>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          I can inspect collections and help update records using your permissions.
+          Ask Hive to plan a day, find places that fit everyone, or fix conflicts. Suggestions go to the group for a vote.
         </p>
       </div>
       <div className="flex flex-col gap-0.5 pt-2">

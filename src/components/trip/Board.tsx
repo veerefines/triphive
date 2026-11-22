@@ -9,106 +9,124 @@ import { CATEGORY_META, type IssueRow, type Stop, type Trip } from './types'
 
 type Peer = { userId: string; userName: string; state: Record<string, unknown> }
 
-function weekday(date: string) {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+export function weekday(date: string, opts: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: 'UTC' })
 }
 
-export function DayColumn({
+/** One day of the itinerary: date bubble + vertical timeline of stops with travel connectors. */
+export function ItineraryDay({
   date,
+  index,
   trip,
   stops,
   issues,
   peers,
   canWrite,
+  selected,
+  onSelect,
   onAdd,
   onEdit,
 }: {
   date: string
+  index: number | null
   trip: Trip
   stops: RecordData<Stop>[]
   issues: RecordData<IssueRow>[]
   peers: Peer[]
   canWrite: boolean
+  selected: boolean
+  onSelect: () => void
   onAdd: (date: string) => void
   onEdit: (stop: RecordData<Stop>) => void
 }) {
-  const ordered = useMemo(() => {
-    const like = stops.map((s) => ({ ...s.data, id: s.recordId, record: s }))
-    return sortDay(like)
-  }, [stops])
+  const ordered = useMemo(() => sortDay(stops.map((s) => ({ ...s.data, id: s.recordId, record: s }))), [stops])
   const legs = useMemo(() => routeLegs(ordered), [ordered])
   const fc = trip.forecast?.[date]
   const dayIssues = issues.filter((i) => i.data.date === date)
   const flagged = new Set(dayIssues.flatMap((i) => i.data.stopIds ?? []))
+  const spend = ordered.reduce((sum, s) => sum + (typeof s.costPerPerson === 'number' ? s.costPerPerson : 0), 0)
 
   return (
-    <div className="flex w-[300px] shrink-0 flex-col rounded-2xl border border-border bg-[var(--color-shell-panel)]">
-      <div className="flex items-start justify-between border-b border-border px-4 py-3">
-        <div>
-          <p className="font-display text-lg font-semibold leading-tight">{weekday(date)}</p>
-          <p className="text-xs text-muted-foreground">
-            {ordered.length} stop{ordered.length === 1 ? '' : 's'}
+    <section id={`day-${date}`} className="scroll-mt-4">
+      <button type="button" onClick={onSelect} className="group mb-3 flex w-full items-center gap-3 text-left">
+        <div
+          className={cn(
+            'flex size-12 shrink-0 flex-col items-center justify-center rounded-2xl border text-center leading-none transition',
+            selected ? 'border-foreground bg-foreground text-background' : 'border-border bg-card',
+          )}
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{weekday(date, { weekday: 'short' })}</span>
+          <span className="mt-0.5 text-lg font-semibold">{weekday(date, { day: 'numeric' })}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-lg font-semibold leading-tight">
+            {index != null ? `Day ${index + 1}` : 'Outside trip dates'}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">{weekday(date, { month: 'short', day: 'numeric' })}</span>
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <span>
+              {ordered.length} stop{ordered.length === 1 ? '' : 's'}
+            </span>
+            {legs.length > 0 && <span>· {legs.reduce((a, l) => a + l.km, 0).toFixed(1)} km</span>}
+            {spend > 0 && <span>· ~${spend}/pp</span>}
             {dayIssues.length > 0 && (
-              <span className="ml-1.5 text-warning">· {dayIssues.length} issue{dayIssues.length === 1 ? '' : 's'}</span>
+              <span className="flex items-center gap-1 font-medium text-warning">
+                · <AlertTriangle className="size-3" /> {dayIssues.length}
+              </span>
             )}
           </p>
         </div>
-        {fc ? (
-          <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs" title={fc.desc}>
-            {fc.rain ? <CloudRain className="size-3.5 text-info" /> : <Sun className="size-3.5 text-primary" />}
+        {fc && (
+          <div className="flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs shadow-[var(--shadow-card)]" title={fc.desc}>
+            {fc.rain ? <CloudRain className="size-3.5 text-info" /> : <Sun className="size-3.5 text-honey" />}
             {fc.min}–{fc.max}°
           </div>
-        ) : (
-          <span className="text-[11px] text-muted-foreground" title="Forecasts cover the next 5 days">no forecast</span>
         )}
-      </div>
+      </button>
 
-      <div className="flex flex-1 flex-col gap-0 p-3">
+      <div className="relative ml-6 border-l-2 border-dashed border-border pb-2 pl-7">
         {ordered.map((s, i) => {
           const leg = legs.find((l) => l.toIndex === i)
           const editors = peers.filter((p) => p.state.editingStopId === s.id)
+          const meta = CATEGORY_META[s.category ?? 'other'] ?? CATEGORY_META.other
           return (
-            <div key={s.id}>
+            <div key={s.id} className="relative">
               {leg && (
-                <div className="flex items-center gap-2 py-1 pl-4 text-[11px] text-muted-foreground">
-                  <span className="h-4 border-l border-dashed border-border" />
-                  {leg.mode === 'walk' ? '🚶' : '🚇'} ~{leg.minutes} min · {leg.km} km
-                </div>
+                <p className="-ml-1 py-1.5 text-[11px] font-medium text-muted-foreground">
+                  {leg.mode === 'walk' ? '🚶' : '🚇'} {leg.minutes} min · {leg.km} km
+                </p>
               )}
-              <StopCard
-                stop={s.record}
-                flagged={flagged.has(s.id)}
-                editors={editors.map((e) => e.userName)}
-                onClick={() => canWrite && onEdit(s.record)}
-              />
+              <span
+                className="absolute -left-[39px] top-4 flex size-5 items-center justify-center rounded-full border-2 border-background text-[10px] font-bold text-white"
+                style={{ background: meta.color }}
+              >
+                {i + 1}
+              </span>
+              <StopCard stop={s.record} flagged={flagged.has(s.id)} editors={editors.map((e) => e.userName)} onClick={() => canWrite && onEdit(s.record)} />
             </div>
           )
         })}
-        {ordered.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">Nothing planned yet</p>}
-        <button
-          type="button"
-          disabled={!canWrite}
-          onClick={() => onAdd(date)}
-          className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-sm text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50"
-        >
-          <Plus className="size-4" /> Add stop
-        </button>
+        {ordered.length === 0 && (
+          <p className="rounded-2xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+            Nothing planned yet — add a stop or ask Hive.
+          </p>
+        )}
+        {index != null && (
+          <button
+            type="button"
+            disabled={!canWrite}
+            onClick={() => onAdd(date)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium transition hover:border-foreground disabled:opacity-50"
+          >
+            <Plus className="size-4" /> Add stop
+          </button>
+        )}
       </div>
-    </div>
+    </section>
   )
 }
 
-function StopCard({
-  stop,
-  flagged,
-  editors,
-  onClick,
-}: {
-  stop: RecordData<Stop>
-  flagged: boolean
-  editors: string[]
-  onClick: () => void
-}) {
+function StopCard({ stop, flagged, editors, onClick }: { stop: RecordData<Stop>; flagged: boolean; editors: string[]; onClick: () => void }) {
   const d = stop.data
   const meta = CATEGORY_META[d.category ?? 'other'] ?? CATEGORY_META.other
   return (
@@ -117,44 +135,48 @@ function StopCard({
       onClick={onClick}
       data-testid="stop-card"
       className={cn(
-        'relative w-full rounded-xl border bg-card p-3 text-left shadow-[0_1px_2px_rgba(80,55,10,0.06)] transition hover:shadow-[0_4px_12px_rgba(80,55,10,0.1)]',
-        flagged ? 'border-warning/70' : 'border-border',
+        'card-lift relative flex w-full items-center gap-3 rounded-2xl border bg-card p-2.5 text-left',
+        flagged ? 'border-warning/60' : 'border-transparent',
         editors.length > 0 && 'ring-2 ring-info/50',
       )}
-      style={{ borderLeft: `4px solid ${meta.color}` }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-medium leading-snug">
-          <span className="mr-1">{meta.emoji}</span>
-          {d.title}
-        </p>
-        <div className="flex shrink-0 items-center gap-1">
-          {d.source === 'ai' && <Bot className="size-3.5 text-primary" aria-label="Suggested by Hive" />}
-          {!!d.fixedTime && <Lock className="size-3 text-muted-foreground" aria-label="Fixed time" />}
-          {flagged && <AlertTriangle className="size-3.5 text-warning" aria-label="Has issues" />}
-        </div>
+      <div className="flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl" style={{ background: `${meta.color}18` }}>
+        {meta.emoji}
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-        {d.start && (
-          <span className="flex items-center gap-1">
-            <Clock className="size-3" />
-            {d.start}
-            {d.end ? `–${d.end}` : ''}
-          </span>
-        )}
-        {typeof d.costPerPerson === 'number' && d.costPerPerson > 0 && <span>${d.costPerPerson}/pp</span>}
-        {!!d.outdoor && <span>outdoor</span>}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="truncate font-semibold leading-snug">{d.title}</p>
+          {d.source === 'ai' && (
+            <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-honey-soft px-1.5 py-0.5 text-[10px] font-medium text-[#8a5a00]">
+              <Bot className="size-3" /> Hive
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <span>{meta.label}</span>
+          {d.start && (
+            <span className="flex items-center gap-1">
+              · <Clock className="size-3" />
+              {d.start}
+              {d.end ? `–${d.end}` : ''}
+            </span>
+          )}
+          {typeof d.costPerPerson === 'number' && d.costPerPerson > 0 && <span>· ${d.costPerPerson}</span>}
+          {!!d.outdoor && <span>· outdoor</span>}
+        </p>
         {d.address && (
-          <span className="flex min-w-0 items-center gap-1 truncate">
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
             <MapPin className="size-3 shrink-0" />
             <span className="truncate">{d.address.split(',').slice(0, 2).join(',')}</span>
-          </span>
+          </p>
         )}
       </div>
+      <div className="flex shrink-0 flex-col items-end gap-1 self-start pt-1">
+        {!!d.fixedTime && <Lock className="size-3.5 text-muted-foreground" aria-label="Fixed time" />}
+        {flagged && <AlertTriangle className="size-4 text-warning" aria-label="Has issues" />}
+      </div>
       {editors.length > 0 && (
-        <span className="absolute -top-2 right-2 rounded-full bg-info px-2 py-0.5 text-[10px] font-medium text-info-foreground">
-          {editors[0]} is editing…
-        </span>
+        <span className="absolute -top-2 right-3 rounded-full bg-info px-2 py-0.5 text-[10px] font-medium text-info-foreground">{editors[0]} is editing…</span>
       )}
     </button>
   )

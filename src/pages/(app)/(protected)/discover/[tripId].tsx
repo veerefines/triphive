@@ -68,9 +68,6 @@ export default function PublicTripPage() {
           destination={l.destination}
           lat={l.lat}
           lng={l.lng}
-          rx={2}
-          ry={1}
-          pin={<span className="absolute left-1/2 top-[40%] block size-4 -translate-x-1/2 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow-lg" />}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-6 text-white">

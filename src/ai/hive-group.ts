@@ -18,7 +18,7 @@ import type { Context, Hono } from 'hono'
 import { generateText, isStepCount, tool, type ToolSet } from 'ai'
 import { z } from 'zod/v4'
 import { loggableError, type ActionTools } from 'deepspace/worker'
-import { HIVE_FAST_MODEL, HIVE_MAX_STEPS, HIVE_MODEL, capTools, groqModel, hasGroq, rateLimitRetryAfter } from './llm.js'
+import { HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, hasGroq, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, addStopOnce, cleanStop, findPlaces, getTrip, googleGate, logActivity, requireMember, userNames, type StopData } from '../server/trips.js'
@@ -180,13 +180,14 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
       tools: capTools(groupTools(tools, tripId, userId, c.env.GOOGLE_MAPS_API_KEY, out)),
       stopWhen: isStepCount(HIVE_MAX_STEPS),
     })
+  const models = await resolveHiveModels(c.env)
   let result: Awaited<ReturnType<typeof call>>
   try {
-    result = await call(HIVE_MODEL)
+    result = await call(models.main)
   } catch (err) {
     // Main model rate-limited before doing anything: retry once on the fast one.
     if (rateLimitRetryAfter(err) == null || out.cards.length || out.added.length) throw err
-    result = await call(HIVE_FAST_MODEL)
+    result = await call(models.fast)
   }
   const text = result.text.trim()
   const isQuiet = (!text || /^NOOP\.?$/i.test(text)) && out.cards.length === 0 && out.added.length === 0

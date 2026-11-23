@@ -119,7 +119,6 @@ export function PublicTripCard({
           destination={l.destination}
           lat={l.lat}
           lng={l.lng}
-          pin={<span className="absolute left-1/2 top-[45%] block size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow" />}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
         {badge && (

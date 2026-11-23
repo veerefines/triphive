@@ -82,7 +82,14 @@ export default function DiscoverPage() {
         <p className="relative mt-3 max-w-lg text-background/70">
           Join public trips from travelers heading the same way, or open yours to meet new people. Solo? Groups welcome you here.
         </p>
-        <div className="relative mt-7 flex max-w-2xl flex-col gap-2 rounded-3xl bg-background p-2 text-foreground shadow-xl sm:flex-row sm:items-center sm:rounded-full">
+        <form
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault()
+            document.getElementById('discover-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+          className="relative mt-7 flex max-w-3xl flex-col gap-2 rounded-3xl bg-background p-2 text-foreground shadow-xl sm:flex-row sm:items-center sm:rounded-full"
+        >
           <label className="flex flex-1 items-center gap-2 px-3">
             <Search className="size-4 text-muted-foreground" />
             <input
@@ -98,7 +105,14 @@ export default function DiscoverPage() {
             <input aria-label="Around date" type="date" value={around} onChange={(e) => setAround(e.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none" />
           </label>
           <span className="hidden shrink-0 rounded-full bg-[var(--color-honey-soft)] px-3 py-2 font-mono text-[11px] font-semibold text-[#9a3f12] sm:inline">±5 days</span>
-        </div>
+          <button
+            type="submit"
+            data-testid="discover-search"
+            className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-[var(--color-honey)] px-5 text-sm font-semibold text-white shadow-md transition hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          >
+            <Search className="size-4" aria-hidden /> Search
+          </button>
+        </form>
       </section>
 
       {myProfile.length === 0 && (
@@ -151,7 +165,7 @@ export default function DiscoverPage() {
       </section>
 
       {/* Public trips */}
-      <section className="mt-10">
+      <section id="discover-results" className="mt-10 scroll-mt-6">
         <SectionHead eyebrow="Open trips" title="Public trips you can join" />
         <div className="scrollbar-none -mx-6 mb-5 flex gap-2 overflow-x-auto px-6">
           <Chip active={openOnly} onClick={() => setOpenOnly((v) => !v)}>

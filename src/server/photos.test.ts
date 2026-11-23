@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ActionTools } from 'deepspace/worker'
-import { isAllowedPhotoUrl, photoKey, placePhotos } from './photos'
+import { isAllowedPhotoUrl, isMapLikeImage, photoKey, placePhotos } from './photos'
 
 type Row = { recordId: string; data: Record<string, unknown> }
 
@@ -59,6 +59,21 @@ describe('isAllowedPhotoUrl', () => {
     expect(isAllowedPhotoUrl('http://upload.wikimedia.org/a.jpg')).toBe(false)
     expect(isAllowedPhotoUrl('javascript:alert(1)')).toBe(false)
     expect(isAllowedPhotoUrl('https://googleusercontent.com.evil.io/a')).toBe(false)
+  })
+})
+
+describe('isMapLikeImage', () => {
+  test('flags locator maps, flags, seals and SVG renders', () => {
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Meghalaya_in_India_%28disputed_hatched%29.svg/800px-x.png')).toBe(true)
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Lisbon_location_map.png/800px-Lisbon_location_map.png')).toBe(true)
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Flag_of_Portugal.png/800px-Flag_of_Portugal.png')).toBe(true)
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Coat_of_arms_of_Lisbon.png/800px-x.png')).toBe(true)
+  })
+
+  test('keeps real photos, including names that merely contain map-like letters', () => {
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Living_root_bridge_Meghalaya.jpg/800px-Living_root_bridge_Meghalaya.jpg')).toBe(false)
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Alfama_Lisbon_rooftops.jpg/800px-Alfama.jpg')).toBe(false)
+    expect(isMapLikeImage('https://lh3.googleusercontent.com/places/ANXAkqAbc')).toBe(false)
   })
 })
 

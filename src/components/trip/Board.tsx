@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { RecordData } from 'deepspace'
-import { AlertTriangle, Bot, Clock, CloudRain, Lock, MapPin, Navigation, Plus, Search, Star, Sun, Trash2 } from 'lucide-react'
+import { AlertTriangle, Bot, Clock, CloudRain, Info, Lock, MapPin, Navigation, Plus, Search, Star, Sun, Trash2 } from 'lucide-react'
 import { Button, Input, Label, Modal, Textarea, cn, useToast } from '@/components/ui'
 import { googleDirectionsUrl, hasCoords, routeLegs } from '@/lib/geo'
 import { sortDay, toMinutes } from '@/lib/planCheck'
@@ -29,8 +29,10 @@ export function ItineraryDay({
   onEdit,
   activeStopId,
   onHoverStop,
+  onDetails,
 }: {
   activeStopId?: string | null
+  onDetails?: (stop: RecordData<Stop>) => void
   onHoverStop?: (id: string | null) => void
   date: string
   index: number | null
@@ -89,7 +91,7 @@ export function ItineraryDay({
         )}
       </button>
 
-      <div className="relative ml-6 border-l-2 border-dashed border-border pb-2 pl-7">
+      <div className="relative ml-6 flex flex-col gap-3 border-l-2 border-dashed border-border pb-2 pl-7">
         {ordered.map((s, i) => {
           const leg = legs.find((l) => l.toIndex === i)
           const editors = peers.filter((p) => p.state.editingStopId === s.id)
@@ -104,7 +106,7 @@ export function ItineraryDay({
               onMouseLeave={() => onHoverStop?.(null)}
             >
               {leg && (
-                <p className="-ml-1 flex items-center gap-2 py-1.5 font-mono text-[11px] text-muted-foreground">
+                <p className="-ml-1 flex items-center gap-2 pb-2 font-mono text-[11px] text-muted-foreground">
                   <span>
                     {leg.mode === 'walk' ? '🚶' : '🚇'} {leg.minutes} min · {leg.km} km
                   </span>
@@ -120,8 +122,9 @@ export function ItineraryDay({
                   })()}
                 </p>
               )}
+              <div className="relative">
               <span
-                className="absolute -left-[39px] top-4 flex size-5 items-center justify-center rounded-full border-2 border-background text-[10px] font-bold text-white"
+                className="absolute -left-[39px] top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-full border-2 border-background text-[10px] font-bold text-white"
                 style={{ background: meta.color }}
               >
                 {i + 1}
@@ -132,8 +135,20 @@ export function ItineraryDay({
                 active={activeStopId === s.id}
                 flagged={flagged.has(s.id)}
                 editors={editors.map((e) => e.userName)}
-                onClick={() => canWrite && onEdit(s.record)}
+                onClick={() => (canWrite ? onEdit(s.record) : onDetails?.(s.record))}
               />
+              {onDetails && s.category !== 'transport' && (
+                <button
+                  type="button"
+                  onClick={() => onDetails(s.record)}
+                  data-testid="stop-details"
+                  aria-label={`Photos, reviews and tips for ${s.title}`}
+                  className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-border bg-card/95 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground shadow-sm transition hover:border-foreground hover:text-foreground"
+                >
+                  <Info className="size-3" aria-hidden /> Details
+                </button>
+              )}
+              </div>
             </div>
           )
         })}
@@ -147,7 +162,7 @@ export function ItineraryDay({
             type="button"
             disabled={!canWrite}
             onClick={() => onAdd(date)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium transition hover:border-foreground disabled:opacity-50"
+            className="mt-1 inline-flex self-start items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium transition hover:border-foreground disabled:opacity-50"
           >
             <Plus className="size-4" /> Add stop
           </button>

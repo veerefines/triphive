@@ -261,7 +261,7 @@ export function ChatPanel({
     <div
       className={`relative flex h-full min-h-0 flex-col bg-background text-foreground ${textSize} ${className ?? ''}`}
     >
-      {header && <div className="shrink-0">{header}</div>}
+      {header && <div className="shrink-0 border-b border-border/60">{header}</div>}
 
       <div
         ref={scrollRef}

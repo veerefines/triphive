@@ -35,7 +35,7 @@ import { buildTripTools, tripSystemPrompt } from './trip-tools.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, requireMember } from '../server/trips.js'
 import { registerHiveGroupRoute } from './hive-group.js'
-import { HIVE_MAX_STEPS, HIVE_MODEL, capTools, groqModel, groqSummarizer, hasGroq, hiveErrorText, rateLimitRetryAfter } from './llm.js'
+import { HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, groqSummarizer, hasGroq, hiveErrorText, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
@@ -255,7 +255,7 @@ export function registerAiChatRoutes(
       })
     }
 
-    const usedModelId = HIVE_MODEL
+    const usedModelId = (await resolveHiveModels(c.env)).main
     const baseSystem = tripTools
       ? tripSystemPrompt(new Date().toISOString().slice(0, 10))
       : buildSystemPrompt(c.env.APP_NAME, schemas)

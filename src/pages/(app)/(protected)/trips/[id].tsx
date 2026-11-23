@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { HiveNavState } from '@/components/AskHiveFab'
 import { getUserColor, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
-import { ArrowLeft, Bot, CloudSun, Copy, FileDown, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeft, Bot, CloudSun, Copy, FileDown, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus, X } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
 import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
@@ -15,11 +15,14 @@ import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/c
 import { callAction, downloadPlanPdf } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
 import { useTripMoney } from '@/components/trip/useTripMoney'
+import { PlaceSheet } from '@/components/trip/PlaceSheet'
+import type { PeekStop } from '@/components/trip/MapPlacePeek'
 import { BrandMark } from '@/components/ui/Brand'
 
 type SideTab = 'hive' | 'chat' | 'proposals' | 'issues' | 'budget' | 'explore'
 
 // Hive always runs on Groq (src/ai/llm.ts); the server ignores modelId.
+const HIVE_TIP_KEY = 'triphive:hive-tip-hidden'
 const HIVE_MODELS = [{ id: 'groq-llama-3.3', label: 'Hive · Llama 3.3 (Groq)', provider: 'groq' }]
 
 const HIVE_PROMPTS = [
@@ -48,9 +51,25 @@ export default function TripPage() {
   const { peers, updateState } = usePresenceRoom(`trip:${tripId}`)
   const { records: myProfiles } = useQuery<{ userId: string; homeCity?: string }>('profiles', { where: { userId: userId ?? '' } })
   const prefRows = useMemo(() => prefs.map((p) => p.data), [prefs])
+  const [detailStop, setDetailStop] = useState<PeekStop | null>(null)
   const money = useTripMoney(trip?.data, prefRows, members.length, myProfiles[0]?.data.homeCity)
 
   const [side, setSide] = useState<SideTab>('hive')
+  const [isHiveTipHidden, setHiveTipHidden] = useState(() => {
+    try {
+      return localStorage.getItem(HIVE_TIP_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const hideHiveTip = () => {
+    setHiveTipHidden(true)
+    try {
+      localStorage.setItem(HIVE_TIP_KEY, '1')
+    } catch {
+      // private mode: the tip just comes back next visit
+    }
+  }
   const [mapDate, setMapDate] = useState<string>('')
   const [editing, setEditing] = useState<{ stop: RecordData<Stop> | null; date: string } | null>(null)
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -333,6 +352,7 @@ export default function TripPage() {
               onHoverStop={setActiveStopId}
               onAdd={(date) => setEditing({ stop: null, date })}
               onEdit={(stop) => setEditing({ stop, date: stop.data.date })}
+              onDetails={(stop) => setDetailStop({ ...stop.data, id: stop.recordId })}
             />
           ))}
           {outside.map((d) => (
@@ -353,6 +373,7 @@ export default function TripPage() {
           ))}
         </section>
 
+        {detailStop && trip && <PlaceSheet stop={detailStop} destination={trip.data.destination} money={money} onClose={() => setDetailStop(null)} />}
         {/* Map */}
         <section className={cn('min-h-[60vh] min-w-0 flex-1 lg:block lg:min-h-0', mobileTab !== 'map' && 'hidden')} aria-label="Map">
           {mapDate && (
@@ -426,12 +447,17 @@ export default function TripPage() {
                     localStorage.setItem(chatKey, id)
                   }}
                   header={
-                    <div className="mx-3 mt-3 flex gap-3 rounded-2xl bg-honey-soft p-3 text-xs text-[#7a3412]">
-                      <BrandMark size={22} />
-                      <p>
-                        <b>Hive</b> researches places, checks weather & routes, and <b>suggests</b> changes. The group votes before anything lands.
-                      </p>
-                    </div>
+                    isHiveTipHidden ? undefined : (
+                      <div className="mx-3 my-3 flex items-start gap-3 rounded-2xl bg-honey-soft p-3 text-xs text-[#7a3412]">
+                        <BrandMark size={22} />
+                        <p className="flex-1">
+                          <b>Hive</b> researches places, checks weather & routes, and <b>suggests</b> changes. The group votes before anything lands.
+                        </p>
+                        <button type="button" onClick={hideHiveTip} aria-label="Dismiss tip" className="-m-1 rounded-full p-1 hover:bg-black/5">
+                          <X className="size-3.5" aria-hidden />
+                        </button>
+                      </div>
+                    )
                   }
                 />
                 </TripChatContext.Provider>

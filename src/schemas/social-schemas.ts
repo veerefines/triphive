@@ -152,8 +152,27 @@ export const placePhotosSchema: CollectionSchema = {
   },
 }
 
+/**
+ * Google place details (reviews, summary, hours) cached for the map peek and
+ * place sheet. Written only by the placeDetails action.
+ */
+export const placeDetailsSchema: CollectionSchema = {
+  name: 'place_details',
+  columns: [
+    { name: 'placeKey', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'data', storage: 'text', interpretation: { kind: 'json' } }, // PlaceDetails | null
+    { name: 'fetchedAt', storage: 'number', interpretation: 'plain' },
+  ],
+  uniqueOn: ['placeKey'],
+  permissions: {
+    member: { read: false, ...SERVER_ONLY },
+    admin: ADMIN,
+  },
+}
+
 export const socialSchemas: CollectionSchema[] = [
   placePhotosSchema,
+  placeDetailsSchema,
   placeReviewsSchema,
   profilesSchema,
   publicTripsSchema,

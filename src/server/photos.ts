@@ -18,6 +18,14 @@ const PHOTO_WIDTH = 800
 const GOOGLE_TTL_MS = 12 * 60 * 60 * 1000 // photoUri links are not permanent
 const WIKI_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const EMPTY_TTL_MS = 24 * 60 * 60 * 1000
+/** A Wikipedia fallback row is retried against Google this often once a Google key exists. */
+const WIKI_RETRY_WITH_GOOGLE_MS = 60 * 60 * 1000
+const WIKI_CANDIDATES = 8
+/**
+ * Wikipedia article images are often locator maps, flags or seals rather
+ * than photos of the place. Filenames give them away.
+ */
+const NOT_A_PHOTO = /(^|[^a-z])(map|maps|locator|location|karte|carte|mapa|flag|flags|coat[_ ]of[_ ]arms|emblem|seal|logo|relief|topograph\w*|districts?|administrative|boundar\w*|diagram|chart|icon|symbol)([^a-z]|$)|\.svg/i
 const FETCH_TIMEOUT_MS = 6000
 const WIKI_UA = 'TripHive/1.0 (https://triphive.app.space)'
 
@@ -58,6 +66,20 @@ function canonicalBias(q: PhotoQuery): PhotoQuery {
 }
 
 /** Only https image URLs from the two CDNs we resolve to are passed to the client. */
+/** True for map, flag, seal and SVG images that should never be shown as a place photo. */
+export function isMapLikeImage(url: string): boolean {
+  try {
+    return NOT_A_PHOTO.test(decodeURIComponent(new URL(url).pathname))
+  } catch {
+    return true
+  }
+}
+
+/** Allowed host and an actual photo. */
+function isUsablePhoto(url: string): boolean {
+  return isAllowedPhotoUrl(url) && !isMapLikeImage(url)
+}
+
 export function isAllowedPhotoUrl(url: string): boolean {
   try {
     const u = new URL(url)
@@ -107,7 +129,7 @@ async function wikipediaPhotos(q: PhotoQuery, max: number): Promise<string[]> {
     format: 'json',
     generator: 'search',
     gsrsearch: q.near ? `${q.q} ${q.near}` : q.q,
-    gsrlimit: String(Math.max(3, max)),
+    gsrlimit: String(Math.max(WIKI_CANDIDATES, max)),
     prop: 'pageimages',
     piprop: 'thumbnail',
     pithumbsize: String(PHOTO_WIDTH),
@@ -120,7 +142,7 @@ async function wikipediaPhotos(q: PhotoQuery, max: number): Promise<string[]> {
   return Object.values(data?.query?.pages ?? {})
     .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
     .map((p) => p.thumbnail?.source ?? '')
-    .filter(isAllowedPhotoUrl)
+    .filter(isUsablePhoto)
     .slice(0, max)
 }
 
@@ -139,7 +161,9 @@ async function lookup(googleKey: string | undefined, q: PhotoQuery): Promise<Pho
 
 type CacheRow = { recordId: string; urls: string[]; source: Source; fetchedAt: number }
 
-function isFresh(row: CacheRow, now: number): boolean {
+function isFresh(row: CacheRow, now: number, hasGoogle: boolean): boolean {
+  if (row.source !== 'none' && row.urls.length === 0) return false // every cached url was filtered out
+  if (hasGoogle && row.source === 'wikipedia' && now - row.fetchedAt >= WIKI_RETRY_WITH_GOOGLE_MS) return false
   const ttl = row.source === 'google' ? GOOGLE_TTL_MS : row.source === 'wikipedia' ? WIKI_TTL_MS : EMPTY_TTL_MS
   return now - row.fetchedAt < ttl
 }
@@ -148,7 +172,7 @@ async function readCache(tools: ActionTools, key: string): Promise<CacheRow | nu
   const r = await tools.query<{ urls?: string[]; source?: Source; fetchedAt?: number }>('place_photos', { where: { placeKey: key }, limit: 1 })
   const row = r.success ? r.data.records[0] : undefined
   if (!row) return null
-  const urls = Array.isArray(row.data.urls) ? row.data.urls.filter((u): u is string => typeof u === 'string' && isAllowedPhotoUrl(u)) : []
+  const urls = Array.isArray(row.data.urls) ? row.data.urls.filter((u): u is string => typeof u === 'string' && isUsablePhoto(u)) : []
   return { recordId: row.recordId, urls, source: row.data.source ?? 'none', fetchedAt: Number(row.data.fetchedAt ?? 0) }
 }
 
@@ -179,7 +203,7 @@ export async function placePhotos(tools: ActionTools, userId: string, googleKey:
 
   const cached = new Map(await Promise.all(distinct.map(async (k) => [k, await readCache(tools, k).catch(() => null)] as const)))
   const misses: Miss[] = distinct
-    .filter((k) => { const row = cached.get(k); return !row || !isFresh(row, now) })
+    .filter((k) => { const row = cached.get(k); return !row || !isFresh(row, now, !!googleKey) })
     .map((k) => ({ key: k, query: queries[keys.indexOf(k)]!, stale: cached.get(k) ?? null }))
 
   const results = new Map<string, string[]>(distinct.map((k) => [k, cached.get(k)?.urls ?? []]))

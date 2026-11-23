@@ -4,23 +4,20 @@
  * data already loaded or cached (stops, place_reviews, trip_messages cards,
  * place_photos), so hovering costs no LLM or Places call beyond the photo cache.
  */
-import { useMemo } from 'react'
-import { useQuery } from 'deepspace'
-import { ExternalLink, Navigation, Star } from 'lucide-react'
+import { ExternalLink, Maximize2, Navigation, Star } from 'lucide-react'
 import { PlaceGallery } from '@/components/ui/PlaceImage'
 import { HiveAvatar } from '@/components/ui/Brand'
 import { cn } from '@/components/ui'
-import type { PlaceCard } from '@/ai/hive-group'
-import { placeKey, summarizeReviews, type PlaceReviewData } from '@/lib/reviews'
+import { usePlaceDetails } from '@/lib/usePlaceDetails'
 import { CATEGORY_META, type Stop } from './types'
 import type { TripMoney } from './useTripMoney'
+import { useCommunity, useHiveCard } from './usePlaceInsights'
+import { mapsLinks } from './placeLinks'
 import { PEEK_HEIGHT, PEEK_WIDTH, type PeekPlacement } from './peekPlacement'
 
-const MAX_QUOTES = 2
 const MAX_CHIPS = 4
 
 export type PeekStop = Stop & { id: string }
-type TripMsg = { tripId: string; cards?: PlaceCard[] }
 
 type MapPlacePeekProps = {
   stop: PeekStop
@@ -29,25 +26,7 @@ type MapPlacePeekProps = {
   placement: PeekPlacement
   onEnter: () => void
   onLeave: () => void
-}
-
-/** The Hive card shared for this place most recently, if any. */
-function useHiveCard(tripId: string, name: string): PlaceCard | undefined {
-  const { records } = useQuery<TripMsg>('trip_messages', { where: { tripId } })
-  return useMemo(() => {
-    const key = placeKey(name, '')
-    const cards = records.flatMap((m) => m.data.cards ?? [])
-    return cards.slice().reverse().find((c) => placeKey(c.name, '') === key)
-  }, [records, name])
-}
-
-function useCommunity(name: string, destination: string) {
-  const { records } = useQuery<PlaceReviewData>('place_reviews', { where: { placeKey: placeKey(name, destination) } })
-  return useMemo(() => {
-    const rows = records.map((r) => r.data)
-    const quotes = rows.map((r) => r.text?.trim()).filter((t): t is string => !!t).slice(0, MAX_QUOTES)
-    return { ...summarizeReviews(rows), quotes }
-  }, [records])
+  onExpand: () => void
 }
 
 function Chips({ label, items }: { label: string; items: string[] }) {
@@ -66,21 +45,14 @@ function Chips({ label, items }: { label: string; items: string[] }) {
   )
 }
 
-function mapsLinks(stop: PeekStop, destination: string) {
-  const hasPoint = typeof stop.lat === 'number' && typeof stop.lng === 'number'
-  const where = hasPoint ? `${stop.lat},${stop.lng}` : `${stop.title}, ${destination}`
-  return {
-    directions: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(where)}`,
-    open: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${stop.title}, ${destination}`)}`,
-  }
-}
-
-export function MapPlacePeek({ stop, destination, money, placement, onEnter, onLeave }: MapPlacePeekProps) {
+export function MapPlacePeek({ stop, destination, money, placement, onEnter, onLeave, onExpand }: MapPlacePeekProps) {
   const meta = CATEGORY_META[stop.category ?? 'other'] ?? CATEGORY_META.other
   const card = useHiveCard(stop.tripId, stop.title)
   const community = useCommunity(stop.title, destination)
-  const rating = stop.rating ?? card?.rating
-  const ratingCount = stop.ratingCount ?? card?.ratingCount
+  const { details } = usePlaceDetails({ name: stop.title, destination, lat: stop.lat, lng: stop.lng })
+  const rating = details?.rating ?? stop.rating ?? card?.rating
+  const ratingCount = details?.ratingCount ?? stop.ratingCount ?? card?.ratingCount
+  const topReview = details?.reviews.find((r) => r.text.length > 0)
   const cost = stop.costPerPerson ?? card?.costPerPersonUsd ?? community.avgSpentUsd ?? undefined
   const time = [stop.start, stop.end].filter(Boolean).join('–')
   const links = mapsLinks(stop, destination)
@@ -138,12 +110,25 @@ export function MapPlacePeek({ stop, destination, money, placement, onEnter, onL
           </span>
         </div>
 
+        {details?.openNow != null && (
+          <span className={cn('self-start rounded-full px-2 py-0.5 text-[10px] font-semibold', details.openNow ? 'bg-success/15 text-success' : 'bg-destructive/10 text-destructive')}>
+            {details.openNow ? 'Open now' : 'Closed now'}
+          </span>
+        )}
+        {details?.summary && <p className="text-foreground/90">{details.summary}</p>}
+
         {community.quotes.map((q) => (
           <p key={q} className="border-l-2 border-[var(--color-honey)] pl-2 italic text-muted-foreground">
             “{q}”
           </p>
         ))}
 
+        {topReview && (
+          <p className="rounded-lg bg-muted/70 p-2 text-muted-foreground">
+            <span className="line-clamp-3">“{topReview.text}”</span>
+            <span className="mt-0.5 block text-[10px] not-italic">{topReview.author} on Google</span>
+          </p>
+        )}
         {card?.why && <p className="text-foreground/90">{card.why}</p>}
         {!card && stop.notes && <p className="text-foreground/90">{stop.notes}</p>}
         <Chips label="Must try" items={card?.mustTry ?? []} />
@@ -152,11 +137,14 @@ export function MapPlacePeek({ stop, destination, money, placement, onEnter, onL
       </div>
 
       <div className="flex shrink-0 gap-2 border-t border-border p-2">
+        <button type="button" onClick={onExpand} data-testid="map-peek-expand" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[var(--color-honey)] px-3 py-1.5 text-[11px] font-semibold text-foreground hover:opacity-90">
+          <Maximize2 className="size-3.5" aria-hidden /> More
+        </button>
         <a href={links.directions} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-[11px] font-semibold text-background hover:opacity-90">
           <Navigation className="size-3.5" aria-hidden /> Directions
         </a>
         <a href={links.open} target="_blank" rel="noopener noreferrer" className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[11px] font-semibold hover:bg-muted">
-          <ExternalLink className="size-3.5" aria-hidden /> Open in Maps
+          <ExternalLink className="size-3.5" aria-hidden /> Maps
         </a>
       </div>
     </div>

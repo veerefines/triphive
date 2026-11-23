@@ -15,6 +15,7 @@ import { useDayRoutes, type DayStopPoint } from './useDayRoutes'
 import type { TripMoney } from './useTripMoney'
 import { LegsStrip, MODE_STYLE } from './LegsStrip'
 import { MapPlacePeek, type PeekStop } from './MapPlacePeek'
+import { PlaceSheet } from './PlaceSheet'
 import { placePeek, type PeekPlacement } from './peekPlacement'
 
 /** Hover intent before the peek opens, and grace period to move onto it. */
@@ -47,6 +48,7 @@ export function RouteMap({
   const layer = useRef<L.LayerGroup | null>(null)
   const bounds = useRef<L.LatLngBounds | null>(null)
   const [peek, setPeek] = useState<PeekState | null>(null)
+  const [sheetStop, setSheetStop] = useState<PeekStop | null>(null)
   const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -200,7 +202,10 @@ export function RouteMap({
         </a>
       )}
       {peekStop && peek && (
-        <MapPlacePeek stop={peekStop} destination={trip.destination} money={money} placement={peek.placement} onEnter={cancelClose} onLeave={scheduleClose} />
+        <MapPlacePeek stop={peekStop} destination={trip.destination} money={money} placement={peek.placement} onEnter={cancelClose} onLeave={scheduleClose} onExpand={() => { setSheetStop(peekStop); setPeek(null) }} />
+      )}
+      {sheetStop && (
+        <PlaceSheet stop={sheetStop} destination={trip.destination} money={money} onClose={() => setSheetStop(null)} />
       )}
       {legs.length > 0 && <LegsStrip legs={legs} points={points} money={money} activeStopId={activeStopId} onFocus={onPinClick} />}
       {ordered.length > located.length && (

@@ -172,7 +172,12 @@ function groupPrompt(today: string): string {
   ].join('\n')
 }
 
-async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: string, userId: string, rows: ChatRow[]): Promise<void> {
+/** Counts finished model steps so a failed run only refunds quota when Groq did no billable work. */
+interface RunProgress {
+  steps: number
+}
+
+async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: string, userId: string, rows: ChatRow[], progress: RunProgress): Promise<void> {
   const names = await userNames(tools, [...new Set(rows.map((r) => r.senderId).filter((s) => s !== HIVE_SENDER))])
   const full = rows.map((r) => `${r.senderId === HIVE_SENDER ? 'Hive' : (names[r.senderId]?.name ?? 'Traveler')}: ${r.text}`).join('\n')
   // Newest messages matter most; keep the tail within Hive's Groq budget.
@@ -185,6 +190,9 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
     generateText({
       abortSignal,
       maxRetries,
+      onStepEnd: () => {
+        progress.steps += 1
+      },
       model: groqModel(c.env, modelId),
       instructions: groupPrompt(new Date().toISOString().slice(0, 10)),
       messages: [{ role: 'user', content: `Group chat so far:\n${transcript}` }],
@@ -245,10 +253,12 @@ export function registerHiveGroupRoute(app: Hono<AppContext>, requireAccess: Req
     if (!reservation.ok) return c.json({ error: reservation.error }, reservation.status)
 
     // Finish even if the tab closes: the reply lands in the shared chat.
-    const run = runHive(c, tools, tripId, userId, rows).catch(async (err) => {
+    const progress: RunProgress = { steps: 0 }
+    const run = runHive(c, tools, tripId, userId, rows, progress).catch(async (err) => {
       console.error(`[hive-group] failed: ${loggableError(err)}`)
       if (rateLimitRetryAfter(err) == null && !isTimeout(err)) return
-      await reservation.refund()
+      // Refund only when no model step completed; otherwise the turn was used.
+      if (progress.steps === 0) await reservation.refund()
       // Say so in the chat instead of leaving "Hive is reading the chat…" hanging.
       const r = await tools.create('trip_messages', { tripId, senderId: HIVE_SENDER, text: BUSY_REPLY })
       if (!r.success) console.error(`[hive-group] busy reply write failed: ${r.error}`)

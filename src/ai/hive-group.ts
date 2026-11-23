@@ -21,7 +21,7 @@ import { loggableError, type ActionTools } from 'deepspace/worker'
 import { HIVE_FAST_MODEL, HIVE_MAX_STEPS, HIVE_MODEL, capTools, groqModel, hasGroq, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 import { createActionTools } from '../server/action-routes.js'
-import { TripError, cleanStop, findPlaces, getTrip, googleGate, logActivity, requireMember, userNames, type StopData } from '../server/trips.js'
+import { TripError, addStopOnce, cleanStop, findPlaces, getTrip, googleGate, logActivity, requireMember, userNames, type StopData } from '../server/trips.js'
 import { featuredNear } from '../data/featured.js'
 import { placeKey, summarizeReviews, type PlaceReviewData } from '../lib/reviews.js'
 import { buildTripTools } from './trip-tools.js'
@@ -103,11 +103,11 @@ function groupTools(tools: ActionTools, tripId: string, userId: string, googleKe
         if (out.added.length >= MAX_ADDS_PER_RUN) return { error: `At most ${MAX_ADDS_PER_RUN} adds per message.` }
         try {
           const clean = cleanStop(stop as Partial<StopData>, false)
-          const r = await tools.create('stops', { ...clean, tripId, source: 'ai' })
-          if (!r.success) return { error: r.error }
+          const { stopId, isDuplicate } = await addStopOnce(tools, tripId, clean, 'ai')
+          if (isDuplicate) return { added: false, stopId, note: `${clean.title} is already on ${clean.date}; not added again.` }
           await logActivity(tools, tripId, HIVE_SENDER, `added ${clean.title} on ${clean.date} from group chat — ${because}`)
           out.added.push(`${clean.title} (${clean.date}${clean.start ? ` ${clean.start}` : ''})`)
-          return { added: true, stopId: r.data.recordId }
+          return { added: true, stopId }
         } catch (err) {
           if (err instanceof TripError) return { error: err.message }
           throw err

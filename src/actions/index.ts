@@ -12,6 +12,7 @@ import {
   createTrip,
   findPlaces,
   googleGate,
+  addStopOnce,
   getTrip,
   joinTrip,
   listMembers,
@@ -81,9 +82,8 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const stop = cleanStop((params.stop ?? {}) as Partial<StopData>, false)
     // `fromHive`: a human clicked "Add" on a place Hive suggested — still a
     // human decision, but credit the source on the card.
-    const r = await tools.create('stops', { ...stop, tripId, source: params.fromHive === true ? 'ai' : 'human' })
-    if (!r.success) throw new TripError(r.error)
-    return { stopId: r.data.recordId }
+    const { stopId, isDuplicate } = await addStopOnce(tools, tripId, stop, params.fromHive === true ? 'ai' : 'human')
+    return { stopId, isDuplicate }
   }),
 
   /** Upsert the caller's own travel preferences for a trip. */

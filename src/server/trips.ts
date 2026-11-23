@@ -11,6 +11,7 @@ import type { ActionTools } from 'deepspace/worker'
 import { googlePlacesSearch } from './google'
 import { checkPlan, summarizeForecast, tripDates, type DayForecast, type Issue, type PrefLike, type StopLike } from '../lib/planCheck'
 import { LIMITS, reserve } from './limits.js'
+import { placeKey } from '../lib/reviews'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -388,6 +389,32 @@ export function cleanStop(input: Partial<StopData>, partial: boolean): Partial<S
   return out as Partial<StopData>
 }
 
+/** Same place on the same day: compared by folded name, so "Café X" and "cafe x" match. */
+export function isSameStop(a: Pick<StopData, 'title' | 'date'>, b: Pick<StopData, 'title' | 'date'>): boolean {
+  return a.date === b.date && placeKey(a.title, '') === placeKey(b.title, '')
+}
+
+/**
+ * Create a stop unless the trip already has the same place on that day.
+ * Every write path (manual add, Hive group chat, accepted proposals) goes
+ * through here, so a repeated "add" from Hive or a double-click is a no-op.
+ */
+export async function addStopOnce(
+  tools: ActionTools,
+  tripId: string,
+  stop: Partial<StopData>,
+  source: 'ai' | 'human',
+): Promise<{ stopId: string; isDuplicate: boolean }> {
+  if (!stop.title || !stop.date) throw new TripError('A new stop needs a title and a date')
+  const existing = await tools.query<StopData>('stops', { where: { tripId, date: stop.date } })
+  if (!existing.success) throw new TripError(existing.error)
+  const twin = existing.data.records.find((r) => isSameStop(r.data, { title: stop.title!, date: stop.date! }))
+  if (twin) return { stopId: twin.recordId, isDuplicate: true }
+  const r = await tools.create('stops', { ...stop, tripId, source })
+  if (!r.success) throw new TripError(r.error)
+  return { stopId: r.data.recordId, isDuplicate: false }
+}
+
 export async function createProposal(
   tools: ActionTools,
   tripId: string,
@@ -464,8 +491,8 @@ export async function voteOnProposal(tools: ActionTools, userId: string, proposa
 /** Apply an accepted proposal. Returns false if the target stop is gone/moved. */
 async function applyProposal(tools: ActionTools, p: ProposalData): Promise<boolean> {
   if (p.kind === 'add' && p.payload.stop) {
-    const r = await tools.create('stops', { ...p.payload.stop, tripId: p.tripId, source: 'ai' })
-    return r.success
+    await addStopOnce(tools, p.tripId, p.payload.stop, 'ai')
+    return true
   }
   if (!p.payload.stopId) return false
   const s = await tools.get<StopData>('stops', p.payload.stopId)

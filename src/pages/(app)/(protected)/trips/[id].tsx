@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import type { HiveNavState } from '@/components/AskHiveFab'
 import { getUserColor, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
 import { ArrowLeft, Bot, CloudSun, Copy, FileDown, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
@@ -59,16 +60,17 @@ export default function TripPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [activeStopId, setActiveStopId] = useState<string | null>(null)
   const [mobileTab, setMobileTab] = useState<'plan' | 'map' | 'hive'>('plan')
-  // `?hive=<prompt>` (from the global Ask Hive button) opens Hive with the question queued.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const hiveParam = searchParams.get('hive')
+  // The global Ask Hive button navigates here with router state (never a URL
+  // param, so a shared link cannot auto-send a prompt). Consume it once.
+  const location = useLocation()
+  const hiveNav = location.state as HiveNavState | null
   useEffect(() => {
-    if (hiveParam === null) return
+    if (!hiveNav?.openHive) return
     setSide('hive')
     setMobileTab('hive')
-    if (hiveParam && hiveParam !== '1') setPendingPrompt(hiveParam)
-    setSearchParams({}, { replace: true })
-  }, [hiveParam, setSearchParams])
+    if (hiveNav.hivePrompt) setPendingPrompt(hiveNav.hivePrompt)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [hiveNav, location.pathname, navigate])
   const focusStop = useCallback((id: string) => {
     setActiveStopId(id)
     setMobileTab('plan')

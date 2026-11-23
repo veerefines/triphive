@@ -2,7 +2,7 @@
  * Floating "Ask Hive" button on every signed-in page except a trip page
  * (which already has the Hive panel). Hive only runs inside a trip the user
  * belongs to (the chat route enforces it), so the button asks which trip, then
- * opens that trip with the Hive tab focused and the question pre-filled.
+ * opens that trip with the Hive tab focused and the question queued.
  */
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -16,11 +16,11 @@ const TRIP_PAGE = /^\/trips\/[^/]+/
 
 type TripRow = { title: string; destination: string; startDate: string }
 
-/** URL that opens a trip with Hive focused; the trip page reads `?hive=`. */
-export function hiveUrl(tripId: string, prompt: string): string {
-  const q = prompt.trim().slice(0, MAX_PROMPT)
-  return `/trips/${tripId}?hive=${encodeURIComponent(q || '1')}`
-}
+/**
+ * Router state the trip page reads to open Hive. Router state (not a query
+ * param) so an external link can never auto-send a prompt as the viewer.
+ */
+export type HiveNavState = { openHive: true; hivePrompt: string }
 
 function TripPicker({ onPick }: { onPick: (tripId: string | null, prompt: string) => void }) {
   const [prompt, setPrompt] = useState('')
@@ -85,7 +85,9 @@ export function AskHiveFab() {
 
   function handlePick(tripId: string | null, prompt: string) {
     setOpen(false)
-    navigate(tripId ? hiveUrl(tripId, prompt) : '/trips')
+    if (!tripId) return navigate('/trips')
+    const state: HiveNavState = { openHive: true, hivePrompt: prompt.trim().slice(0, MAX_PROMPT) }
+    navigate(`/trips/${tripId}`, { state })
   }
 
   return (

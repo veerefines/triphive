@@ -21,12 +21,25 @@ const WIKI_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const EMPTY_TTL_MS = 24 * 60 * 60 * 1000
 /** A Wikipedia fallback row is retried against Google this often once a Google key exists. */
 const WIKI_RETRY_WITH_GOOGLE_MS = 60 * 60 * 1000
-const WIKI_CANDIDATES = 8
+const WIKI_CANDIDATES = 10
+/** A Wikipedia match farther than this from the trip location is some other place. */
+const WIKI_MAX_DISTANCE_KM = 150
+/** Nearby-landmark fallback search radius (Wikipedia geosearch maximum is 10 km). */
+const WIKI_NEARBY_RADIUS_M = 10_000
+/**
+ * Bumped when the lookup rules change, so cached picks made under the old
+ * rules (e.g. portraits from free-text search) are fetched again.
+ */
+const CACHE_VERSION = 'v2'
+/** Short descriptions of articles about people, events and organisations rather than places. */
+const NOT_A_PLACE = /\b(politician|actor|actress|singer|musician|player|footballer|cricketer|writer|author|poet|businessman|businesswoman|journalist|minister|president|king|queen|prince|princess|born|died|election|summit|treaty|meeting|conference|war|battle|film|album|song|band|television|series|novel|party|organi[sz]ation|company|union)\b/i
 /**
  * Wikipedia article images are often locator maps, flags or seals rather
  * than photos of the place. Filenames give them away.
  */
-const NOT_A_PHOTO = /(^|[^a-z])(map|maps|locator|location|karte|carte|mapa|flag|flags|coat[_ ]of[_ ]arms|emblem|seal|logo|relief|topograph\w*|districts?|administrative|boundar\w*|diagram|chart|icon|symbol)([^a-z]|$)|\.svg/i
+const NOT_A_PHOTO = /(^|[^a-z])(map|maps|locator|location|karte|carte|mapa|flag|flags|coat[_ ]of[_ ]arms|emblem|seal|logo\w*|relief|topograph\w*|districts?|administrative|boundar\w*|diagram|chart|icon|symbol)([^a-z]|$)|\.svg/i
+const WIKIMEDIA_HOSTS = new Set(['upload.wikimedia.org', 'thumb.wikimedia.org'])
+const WIKIMEDIA_PHOTO_EXT = /\.(jpe?g|webp)$/i
 const FETCH_TIMEOUT_MS = 6000
 const WIKI_UA = 'TripHive/1.0 (https://triphive.app.space)'
 
@@ -57,7 +70,7 @@ export function photoKey(q: PhotoQuery): string {
   const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/\p{M}+/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
   const hasBias = typeof q.lat === 'number' && typeof q.lng === 'number'
   const bias = hasBias ? `${q.lat!.toFixed(1)},${q.lng!.toFixed(1)}` : ''
-  return `${norm(q.q)}|${norm(q.near ?? '')}|${q.max ?? 1}|${bias}`
+  return `${CACHE_VERSION}|${norm(q.q)}|${norm(q.near ?? '')}|${q.max ?? 1}|${bias}`
 }
 
 /** Bias rounded to the key's precision, so every caller sharing a key sends the same request. */
@@ -66,7 +79,6 @@ function canonicalBias(q: PhotoQuery): PhotoQuery {
   return { ...q, lat: Number(q.lat.toFixed(1)), lng: Number(q.lng.toFixed(1)) }
 }
 
-/** Only https image URLs from the two CDNs we resolve to are passed to the client. */
 /** True for map, flag, seal and SVG images that should never be shown as a place photo. */
 export function isMapLikeImage(url: string): boolean {
   try {
@@ -81,10 +93,14 @@ function isUsablePhoto(url: string): boolean {
   return isAllowedPhotoUrl(url) && !isMapLikeImage(url)
 }
 
+/** Only https photo URLs from the CDNs we resolve to are passed to the client. */
 export function isAllowedPhotoUrl(url: string): boolean {
   try {
     const u = new URL(url)
-    return u.protocol === 'https:' && (u.hostname.endsWith('.googleusercontent.com') || u.hostname === 'upload.wikimedia.org')
+    if (u.protocol !== 'https:') return false
+    if (u.hostname.endsWith('.googleusercontent.com')) return true
+    // Wikimedia serves photos as JPEG/WebP; PNG and SVG files there are logos, maps and diagrams.
+    return WIKIMEDIA_HOSTS.has(u.hostname) && WIKIMEDIA_PHOTO_EXT.test(decodeURIComponent(u.pathname))
   } catch {
     return false
   }
@@ -124,27 +140,77 @@ async function googlePhotos(apiKey: string, q: PhotoQuery, max: number): Promise
   return uris.filter(isAllowedPhotoUrl)
 }
 
-async function wikipediaPhotos(q: PhotoQuery, max: number): Promise<string[]> {
-  const params = new URLSearchParams({
+type WikiPage = {
+  index?: number
+  thumbnail?: { source?: string }
+  coordinates?: Array<{ lat?: number; lon?: number }>
+  pageprops?: { 'wikibase-shortdesc'?: string }
+}
+
+/** Great-circle distance in km. */
+export function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const rad = (d: number) => (d * Math.PI) / 180
+  const h = Math.sin(rad(bLat - aLat) / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(rad(bLng - aLng) / 2) ** 2
+  return 2 * 6371 * Math.asin(Math.sqrt(h))
+}
+
+/**
+ * True when a Wikipedia page is a real place worth showing: it is geotagged
+ * (people, events and organisations are not), its description does not read
+ * like a person or event, and it lies near the trip location when one is known.
+ */
+export function isPlacePage(page: WikiPage, q: Pick<PhotoQuery, 'lat' | 'lng'>): boolean {
+  const at = page.coordinates?.[0]
+  if (typeof at?.lat !== 'number' || typeof at?.lon !== 'number') return false
+  if (NOT_A_PLACE.test(page.pageprops?.['wikibase-shortdesc'] ?? '')) return false
+  if (typeof q.lat !== 'number' || typeof q.lng !== 'number') return true
+  return distanceKm(q.lat, q.lng, at.lat, at.lon) <= WIKI_MAX_DISTANCE_KM
+}
+
+async function wikiPages(params: Record<string, string>): Promise<WikiPage[]> {
+  const query = new URLSearchParams({
     action: 'query',
     format: 'json',
-    generator: 'search',
-    gsrsearch: q.near ? `${q.q} ${q.near}` : q.q,
-    gsrlimit: String(Math.max(WIKI_CANDIDATES, max)),
-    prop: 'pageimages',
+    prop: 'pageimages|coordinates|pageprops',
     piprop: 'thumbnail',
     pithumbsize: String(PHOTO_WIDTH),
+    ppprop: 'wikibase-shortdesc',
+    colimit: 'max',
     origin: '*',
+    ...params,
   })
-  const data = await fetchJson<{ query?: { pages?: Record<string, { index?: number; thumbnail?: { source?: string } }> } }>(
-    `https://en.wikipedia.org/w/api.php?${params}`,
-    { headers: { 'User-Agent': WIKI_UA } },
-  )
-  return Object.values(data?.query?.pages ?? {})
-    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+  const data = await fetchJson<{ query?: { pages?: Record<string, WikiPage> } }>(`https://en.wikipedia.org/w/api.php?${query}`, {
+    headers: { 'User-Agent': WIKI_UA },
+  })
+  return Object.values(data?.query?.pages ?? {}).sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+}
+
+function photosOf(pages: WikiPage[], q: PhotoQuery, max: number): string[] {
+  return pages
+    .filter((p) => isPlacePage(p, q))
     .map((p) => p.thumbnail?.source ?? '')
     .filter(isUsablePhoto)
     .slice(0, max)
+}
+
+/**
+ * Wikipedia fallback (no key). Name search first, kept only for geotagged
+ * place articles; then landmarks around the coordinates, so a restaurant
+ * without an article still shows its neighbourhood rather than nothing.
+ */
+async function wikipediaPhotos(q: PhotoQuery, max: number): Promise<string[]> {
+  const byName = photosOf(
+    await wikiPages({ generator: 'search', gsrsearch: q.near ? `${q.q} ${q.near}` : q.q, gsrlimit: String(Math.max(WIKI_CANDIDATES, max)) }),
+    q,
+    max,
+  )
+  if (byName.length >= max || typeof q.lat !== 'number' || typeof q.lng !== 'number') return byName
+  const nearby = photosOf(
+    await wikiPages({ generator: 'geosearch', ggscoord: `${q.lat}|${q.lng}`, ggsradius: String(WIKI_NEARBY_RADIUS_M), ggslimit: String(WIKI_CANDIDATES) }),
+    q,
+    max,
+  )
+  return [...new Set([...byName, ...nearby])].slice(0, max)
 }
 
 async function lookup(googleKey: string | undefined, q: PhotoQuery): Promise<PhotoSet> {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ActionTools } from 'deepspace/worker'
-import { isAllowedPhotoUrl, isMapLikeImage, photoKey, placePhotos } from './photos'
+import { distanceKm, isAllowedPhotoUrl, isMapLikeImage, isPlacePage, photoKey, placePhotos } from './photos'
 
 type Row = { recordId: string; data: Record<string, unknown> }
 
@@ -29,7 +29,7 @@ function fakeTools() {
 const WIKI_IMG = 'https://upload.wikimedia.org/a/belem.jpg'
 function mockWikipedia() {
   const fetchMock = vi.fn(async (url: string) =>
-    new Response(JSON.stringify({ query: { pages: { '1': { index: 1, thumbnail: { source: WIKI_IMG } }, '2': { index: 2, thumbnail: { source: 'https://evil.example/x.jpg' } } } } }), { status: 200 }),
+    new Response(JSON.stringify({ query: { pages: { '1': { index: 1, thumbnail: { source: WIKI_IMG }, coordinates: [{ lat: 38.69, lon: -9.21 }] }, '2': { index: 2, thumbnail: { source: 'https://evil.example/x.jpg' }, coordinates: [{ lat: 38.69, lon: -9.21 }] }, '3': { index: 3, thumbnail: { source: 'https://upload.wikimedia.org/a/politician.jpg' }, pageprops: { 'wikibase-shortdesc': 'Indian politician' } } } } }), { status: 200 }),
   )
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
@@ -59,6 +59,12 @@ describe('isAllowedPhotoUrl', () => {
     expect(isAllowedPhotoUrl('http://upload.wikimedia.org/a.jpg')).toBe(false)
     expect(isAllowedPhotoUrl('javascript:alert(1)')).toBe(false)
     expect(isAllowedPhotoUrl('https://googleusercontent.com.evil.io/a')).toBe(false)
+  })
+  test('accepts Wikimedia thumbnails, but only JPEG/WebP photos', () => {
+    expect(isAllowedPhotoUrl('https://thumb.wikimedia.org/wikipedia/commons/thumb/4/41/Lisbon_(cropped).jpg/960px-Lisbon_(cropped).jpg?utm_source=x')).toBe(true)
+    expect(isAllowedPhotoUrl('https://thumb.wikimedia.org/wikipedia/commons/thumb/6/63/Logo_LIS_en.svg/960px-Logo_LIS_en.svg.png')).toBe(false)
+    expect(isAllowedPhotoUrl('https://upload.wikimedia.org/wikipedia/commons/a/a7/Logotipo-vertical.png')).toBe(false)
+    expect(isMapLikeImage('https://upload.wikimedia.org/wikipedia/commons/a/a7/Logotipo-vertical.jpg')).toBe(true)
   })
 })
 
@@ -124,5 +130,33 @@ describe('placePhotos', () => {
     const r = await placePhotos(tools, 'u1', undefined, { queries: [{ q: 'Belem Tower' }] })
     expect(r.photos).toEqual([[]])
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('isPlacePage', () => {
+  const photo = { thumbnail: { source: WIKI_IMG } }
+  const lisbon = { lat: 38.72, lng: -9.14 }
+
+  test('rejects articles without coordinates, such as people and events', () => {
+    expect(isPlacePage({ ...photo, pageprops: { 'wikibase-shortdesc': 'Indian politician' } }, {})).toBe(false)
+    expect(isPlacePage(photo, lisbon)).toBe(false)
+  })
+
+  test('rejects geotagged articles whose description reads like a person or event', () => {
+    expect(isPlacePage({ ...photo, coordinates: [{ lat: 38.7, lon: -9.1 }], pageprops: { 'wikibase-shortdesc': '2007 European Union summit' } }, lisbon)).toBe(false)
+  })
+
+  test('keeps nearby places and drops same-named places far away', () => {
+    const belem = { ...photo, coordinates: [{ lat: 38.69, lon: -9.21 }], pageprops: { 'wikibase-shortdesc': 'Fortified tower in Lisbon' } }
+    expect(isPlacePage(belem, lisbon)).toBe(true)
+    expect(isPlacePage(belem, { lat: 25.47, lng: 91.37 })).toBe(false)
+    expect(isPlacePage(belem, {})).toBe(true)
+  })
+})
+
+describe('distanceKm', () => {
+  test('Lisbon to Porto is about 275 km', () => {
+    expect(distanceKm(38.72, -9.14, 41.15, -8.61)).toBeGreaterThan(260)
+    expect(distanceKm(38.72, -9.14, 41.15, -8.61)).toBeLessThan(290)
   })
 })

@@ -105,18 +105,29 @@ describe('placeDetails action', () => {
     expect(tables.place_details).toHaveLength(1)
   })
 
-  test('refetches fresh rows cached with the old mid-word review cut', async () => {
+  test('refetches rows written before the current cache version, once', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ places: [GOOGLE_PLACE] }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
     const { tools, tables } = fakeTools()
     const params = { name: 'Time Out Market', destination: 'Lisbon, Portugal' }
     await placeDetails(tools, 'u1', 'key', params)
     const row = tables.place_details[0]
-    const stale = { ...(row.data.data as object), reviews: [{ author: 'A', rating: 5, text: 'x'.repeat(600), when: '' }] }
-    tables.place_details[0] = { ...row, data: { ...row.data, data: stale } }
-    const again = await placeDetails(tools, 'u1', 'key', params)
+    const legacy = Object.fromEntries(Object.entries(row.data).filter(([k]) => k !== 'cacheVersion'))
+    tables.place_details[0] = { ...row, data: legacy }
+    await placeDetails(tools, 'u1', 'key', params)
+    await placeDetails(tools, 'u1', 'key', params)
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(again.details?.reviews[0].text).toBe('Great pastries')
+  })
+
+  test('a genuine 600-character review does not force a refetch', async () => {
+    const long = { ...GOOGLE_PLACE, reviews: [{ rating: 5, text: { text: 'x'.repeat(600) } }] }
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ places: [long] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { tools } = fakeTools()
+    const params = { name: 'Time Out Market', destination: 'Lisbon, Portugal' }
+    await placeDetails(tools, 'u1', 'key', params)
+    await placeDetails(tools, 'u1', 'key', params)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   test('refunds the budget when Google fails', async () => {

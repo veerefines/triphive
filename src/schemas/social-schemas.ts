@@ -161,6 +161,7 @@ export const placeDetailsSchema: CollectionSchema = {
   columns: [
     { name: 'placeKey', storage: 'text', interpretation: 'plain', required: true },
     { name: 'data', storage: 'text', interpretation: { kind: 'json' } }, // PlaceDetails | null
+    { name: 'cacheVersion', storage: 'number', interpretation: 'plain' }, // rows below CACHE_VERSION are refetched
     { name: 'fetchedAt', storage: 'number', interpretation: 'plain' },
   ],
   uniqueOn: ['placeKey'],

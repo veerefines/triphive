@@ -14,9 +14,8 @@ import { TripError } from './trips'
 
 const DETAILS_TTL_MS = 24 * 60 * 60 * 1000
 const EMPTY_TTL_MS = 6 * 60 * 60 * 1000
-/** Old rows hard-cut reviews at this length, often mid-word; refetch those. */
-const LEGACY_REVIEW_CAP = 600
-const hasLegacyCut = (d: PlaceDetails) => d.reviews.some((r) => r.text.length === LEGACY_REVIEW_CAP && !r.text.endsWith('…'))
+/** Bump when parsing changes; rows stamped with an older version are refetched once. v2: word-boundary review clipping. */
+export const CACHE_VERSION = 2
 const FETCH_TIMEOUT_MS = 6000
 const MAX_REVIEWS = 5
 const MAX_REVIEW_CHARS = 1200
@@ -201,24 +200,24 @@ async function fetchGoogle(apiKey: string, q: Query, displayName: string): Promi
   return first ? parseGooglePlace(first, displayName) : null
 }
 
-type CacheRow = { recordId: string; details: PlaceDetails | null; fetchedAt: number }
+type CacheRow = { recordId: string; details: PlaceDetails | null; fetchedAt: number; version: number }
 
 async function readCache(tools: ActionTools, key: string): Promise<CacheRow | null> {
-  const r = await tools.query<{ data?: PlaceDetails | null; fetchedAt?: number }>('place_details', { where: { placeKey: key }, limit: 1 })
+  const r = await tools.query<{ data?: PlaceDetails | null; fetchedAt?: number; cacheVersion?: number }>('place_details', { where: { placeKey: key }, limit: 1 })
   const row = r.success ? r.data.records[0] : undefined
   if (!row) return null
   const details = row.data.data && typeof row.data.data === 'object' ? row.data.data : null
-  return { recordId: row.recordId, details, fetchedAt: Number(row.data.fetchedAt ?? 0) }
+  return { recordId: row.recordId, details, fetchedAt: Number(row.data.fetchedAt ?? 0), version: Number(row.data.cacheVersion ?? 0) }
 }
 
 async function writeCache(tools: ActionTools, key: string, existing: CacheRow | null, details: PlaceDetails | null, now: number): Promise<void> {
-  const data = { data: details, fetchedAt: now }
+  const data = { data: details, fetchedAt: now, cacheVersion: CACHE_VERSION }
   const res = existing ? await tools.update('place_details', existing.recordId, data) : await tools.create('place_details', { placeKey: key, ...data })
   if (!res.success) console.error(`[placeDetails] cache write failed for ${JSON.stringify(key)}`)
 }
 
 function isFresh(row: CacheRow, now: number): boolean {
-  if (row.details && hasLegacyCut(row.details)) return false
+  if (row.version < CACHE_VERSION) return false
   return now - row.fetchedAt < (row.details ? DETAILS_TTL_MS : EMPTY_TTL_MS)
 }
 

@@ -128,7 +128,7 @@ const ZERO_DECIMAL = new Set(['JPY', 'KRW', 'VND', 'IDR', 'HUF', 'ISK', 'INR', '
 
 /** Short money label: "€42", "₹3,900", "¥5,200". */
 export function formatMoney(amount: number, currency: string): string {
-  const digits = ZERO_DECIMAL.has(currency) || Math.abs(amount) >= 100 ? 0 : 2
+  const digits = ZERO_DECIMAL.has(currency) || Math.abs(amount) >= 10 ? 0 : 2
   try {
     return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(amount)
   } catch {

@@ -96,7 +96,7 @@ export function estimateTrip(input: BudgetInput): BudgetEstimate {
   const food: BudgetLine = {
     category: 'food',
     usd: round(Math.max(generalFood, plannedFood)),
-    basis: plannedFood > generalFood ? `${foodStops.length} planned meals` : `${days} days × 3 meals at local prices`,
+    basis: plannedFood > generalFood ? `${foodStops.length} planned meals` : `${days} ${days === 1 ? 'day' : 'days'} × 3 meals at local prices`,
   }
 
   const transfer = (2 * (4 + 1.6 * AIRPORT_TRANSFER_KM + 0.35 * 35) * index) / Math.min(4, travellers)

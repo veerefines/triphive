@@ -86,7 +86,7 @@ export function TripBudget({ trip, stops, dates, money, homeCity }: TripBudgetPr
   return (
     <div className="space-y-4 p-4" data-testid="trip-budget">
       <section className="rounded-3xl bg-foreground p-4 text-background">
-        <p className="font-mono text-[10px] uppercase tracking-wide opacity-70">Per person · {dates.length} days · {money.tier} style</p>
+        <p className="font-mono text-[10px] uppercase tracking-wide opacity-70">Per person · {dates.length} {dates.length === 1 ? 'day' : 'days'} · {money.tier} style</p>
         <p className="mt-1 font-display text-3xl font-semibold">{money.local(est.totalUsd)}</p>
         <p className="text-sm opacity-80">{homeTotal ? `≈ ${homeTotal} in ${money.home.currency} · ` : ''}{money.local(est.perDayUsd)}/day</p>
       </section>

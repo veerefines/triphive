@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getUserColor, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
 import { ArrowLeft, Bot, CloudSun, Copy, FileDown, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
@@ -59,6 +59,16 @@ export default function TripPage() {
   const [busy, setBusy] = useState<string | null>(null)
   const [activeStopId, setActiveStopId] = useState<string | null>(null)
   const [mobileTab, setMobileTab] = useState<'plan' | 'map' | 'hive'>('plan')
+  // `?hive=<prompt>` (from the global Ask Hive button) opens Hive with the question queued.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const hiveParam = searchParams.get('hive')
+  useEffect(() => {
+    if (hiveParam === null) return
+    setSide('hive')
+    setMobileTab('hive')
+    if (hiveParam && hiveParam !== '1') setPendingPrompt(hiveParam)
+    setSearchParams({}, { replace: true })
+  }, [hiveParam, setSearchParams])
   const focusStop = useCallback((id: string) => {
     setActiveStopId(id)
     setMobileTab('plan')

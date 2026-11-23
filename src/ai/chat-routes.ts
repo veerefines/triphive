@@ -19,7 +19,6 @@ import {
   turnsToCoreMessages,
   buildUiParts,
   createUserToolExecutor,
-  DEFAULT_CONTEXT_CONFIG,
   getChat,
   createChat,
   updateChat,
@@ -35,7 +34,7 @@ import { buildTripTools, tripSystemPrompt } from './trip-tools.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, requireMember } from '../server/trips.js'
 import { registerHiveGroupRoute } from './hive-group.js'
-import { HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, groqSummarizer, hasGroq, hiveErrorText, rateLimitRetryAfter } from './llm.js'
+import { HIVE_CONTEXT_CONFIG, HIVE_MAX_OUTPUT_TOKENS, HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, groqSummarizer, hasGroq, hiveErrorText, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
@@ -245,7 +244,7 @@ export function registerAiChatRoutes(
     const summarizer = groqSummarizer(c.env)
     const { messages: prepared, newSummary } = await prepareMessagesWithCompaction(
       turns,
-      DEFAULT_CONTEXT_CONFIG,
+      HIVE_CONTEXT_CONFIG,
       { summarizer, cachedSummary },
     )
     if (newSummary) {
@@ -375,6 +374,7 @@ export function registerAiChatRoutes(
       messages,
       tools: capTools(tools),
       stopWhen: isStepCount(HIVE_MAX_STEPS),
+      maxOutputTokens: HIVE_MAX_OUTPUT_TOKENS,
       // Cancel provider and tool work with the request. `onAbort` then saves
       // any completed steps; a zero-step abort saves nothing.
       abortSignal: c.req.raw.signal,

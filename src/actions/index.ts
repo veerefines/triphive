@@ -248,8 +248,8 @@ export const actions: Record<string, ActionHandler<Env>> = {
   sendTripMessage: safe(({ tools, userId, params }) => sendTripMessage(tools, userId, params)),
   suggestStop: safe(({ tools, userId, params }) => suggestStop(tools, userId, params)),
   reviewPlace: safe(({ tools, userId, params }) => reviewPlace(tools, userId, params)),
-  placePhotos: safe(({ tools, userId, params, env }) => placePhotos(tools, userId, env.GOOGLE_MAPS_API_KEY, params)),
-  placeDetails: safe(({ tools, userId, params, env }) => placeDetails(tools, userId, env.GOOGLE_MAPS_API_KEY, params)),
+  placePhotos: safe(({ tools, userId, params, env }) => placePhotos(tools, userId, env.GOOGLE_MAPS_API_KEY?.trim() || undefined, params)),
+  placeDetails: safe(({ tools, userId, params, env }) => placeDetails(tools, userId, env.GOOGLE_MAPS_API_KEY?.trim() || undefined, params)),
   /**
    * Owner-only, irreversible. The client loops phase 'wipe' until done, then
    * calls phase 'seed' once. `confirm` must be the literal string WIPE.

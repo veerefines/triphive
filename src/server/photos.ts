@@ -10,6 +10,7 @@
 import type { ActionTools } from 'deepspace/worker'
 import { z } from 'zod'
 import { LIMITS, reserveAll } from './limits'
+import { googleErrorReason } from './google'
 import { TripError } from './trips'
 
 export const MAX_PHOTOS = 4
@@ -92,7 +93,7 @@ export function isAllowedPhotoUrl(url: string): boolean {
 async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T | null> {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
   if (!res.ok) {
-    console.error(`[photos] ${new URL(url).hostname} ${res.status}`)
+    console.error(`[photos] ${new URL(url).hostname} ${res.status}: ${await googleErrorReason(res)}`)
     return null
   }
   return (await res.json()) as T

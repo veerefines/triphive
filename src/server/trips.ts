@@ -286,9 +286,11 @@ export async function geocodePlace(query: string, near?: { lat?: number; lng?: n
  */
 export function googleGate(tools: ActionTools, userId: string, key: string | undefined) {
   return async (): Promise<string | undefined> => {
-    if (!key) return undefined
+    // A pasted secret can carry a newline or spaces; Google rejects that as unauthenticated.
+    const trimmed = key?.trim()
+    if (!trimmed) return undefined
     const r = await reserve(tools, userId, LIMITS.places)
-    return r.ok ? key : undefined
+    return r.ok ? trimmed : undefined
   }
 }
 

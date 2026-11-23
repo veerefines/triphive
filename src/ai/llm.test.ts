@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APICallError } from 'ai'
-import { FAST_MODEL_PREFS, MAIN_MODEL_PREFS, isModelUnavailable, rankModels } from './llm'
+import { FAST_MODEL_PREFS, HIVE_CONTEXT_CONFIG, MAIN_MODEL_PREFS, hiveErrorText, isModelUnavailable, isRequestTooLarge, pickByCapacity, rankModels } from './llm'
 
 function apiError(statusCode: number, responseBody: string) {
   return new APICallError({ message: responseBody, url: 'https://api.groq.com', requestBodyValues: {}, statusCode, responseBody })
@@ -31,5 +31,43 @@ describe('isModelUnavailable', () => {
   it('ignores rate limits and other errors', () => {
     expect(isModelUnavailable(apiError(429, 'rate limited'))).toBe(false)
     expect(isModelUnavailable(new Error('boom'))).toBe(false)
+  })
+})
+
+describe('pickByCapacity', () => {
+  it('keeps the preferred model when it has room for a full turn', () => {
+    expect(pickByCapacity([{ id: 'a', tpm: 250_000 }, { id: 'b', tpm: 30_000 }], 20_000)?.id).toBe('a')
+  })
+
+  it('skips a preferred model whose tokens-per-minute limit is too small', () => {
+    expect(pickByCapacity([{ id: 'gpt-oss-120b', tpm: 8_000 }, { id: 'scout', tpm: 30_000 }], 20_000)?.id).toBe('scout')
+  })
+
+  it('falls back to the roomiest model when none reaches the minimum', () => {
+    expect(pickByCapacity([{ id: 'a', tpm: 8_000 }, { id: 'b', tpm: 12_000 }, { id: 'c', tpm: 6_000 }], 20_000)?.id).toBe('b')
+  })
+
+  it('treats an unknown limit as roomy and returns null for no models', () => {
+    expect(pickByCapacity([{ id: 'a', tpm: null }, { id: 'b', tpm: 30_000 }], 20_000)?.id).toBe('a')
+    expect(pickByCapacity([], 20_000)).toBeNull()
+  })
+})
+
+describe('isRequestTooLarge', () => {
+  it('detects Groq tokens-per-minute size rejections', () => {
+    expect(isRequestTooLarge(apiError(413, 'Request too large for model `openai/gpt-oss-120b` on tokens per minute (TPM): Limit 8000, Requested 11909'))).toBe(true)
+    expect(isRequestTooLarge(apiError(429, 'rate limited'))).toBe(false)
+  })
+
+  it('gets its own message instead of the generic snag', () => {
+    expect(hiveErrorText(apiError(413, 'Request too large'))).toMatch(/too much for Hive/)
+  })
+})
+
+describe('HIVE_CONTEXT_CONFIG', () => {
+  it('keeps history and tool results far below a free-tier minute of tokens', () => {
+    // ~4 chars per token; 8k TPM is the smallest main-model limit seen.
+    expect(HIVE_CONTEXT_CONFIG.contextBudget / 4).toBeLessThan(8_000)
+    expect(HIVE_CONTEXT_CONFIG.toolResultCap).toBeLessThanOrEqual(HIVE_CONTEXT_CONFIG.contextBudget)
   })
 })

@@ -49,7 +49,7 @@ export async function googlePlacesSearch(
     body: JSON.stringify(body),
   })
   if (!res.ok) {
-    console.error(`[google] places search ${res.status}`)
+    console.error(`[google] places search ${res.status}: ${await googleErrorReason(res)}`)
     return null
   }
   const data = (await res.json()) as {
@@ -79,4 +79,18 @@ export async function googlePlacesSearch(
       openNow: p.currentOpeningHours?.openNow,
       priceLevel: p.priceLevel,
     }))
+}
+
+/**
+ * Google's own reason for a failed call (e.g. "API_KEY_INVALID",
+ * "SERVICE_DISABLED"), for logs. Google error bodies never echo the key.
+ */
+export async function googleErrorReason(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: { status?: string; message?: string; details?: Array<{ reason?: string }> } }
+    const reason = body.error?.details?.find((d) => d.reason)?.reason
+    return [body.error?.status, reason, body.error?.message?.slice(0, 160)].filter(Boolean).join(' | ') || 'no reason given'
+  } catch {
+    return 'unreadable error body'
+  }
 }

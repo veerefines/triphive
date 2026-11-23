@@ -9,6 +9,7 @@ import type { ActionTools } from 'deepspace/worker'
 import { z } from 'zod'
 import { cityOf, placeKey, placeName } from '../lib/reviews'
 import { LIMITS, reserve } from './limits'
+import { googleErrorReason } from './google'
 import { TripError } from './trips'
 
 const DETAILS_TTL_MS = 24 * 60 * 60 * 1000
@@ -180,7 +181,7 @@ async function fetchGoogle(apiKey: string, q: Query, displayName: string): Promi
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
-  if (!res.ok) throw new Error(`places details ${res.status}`)
+  if (!res.ok) throw new Error(`places details ${res.status}: ${await googleErrorReason(res)}`)
   const data = (await res.json()) as { places?: RawPlace[] }
   const first = data.places?.[0]
   return first ? parseGooglePlace(first, displayName) : null

@@ -34,8 +34,27 @@ const RESOLVE_TTL_MS = 60 * 60 * 1000
 const PROBE_TIMEOUT_MS = 8_000
 /** Most model steps (tool round-trips + final answer) in one Hive turn. */
 export const HIVE_MAX_STEPS = 8
+/** Cap on one Hive reply. Groq counts it against tokens-per-minute up front. */
+export const HIVE_MAX_OUTPUT_TOKENS = 1_200
+/**
+ * Below this tokens-per-minute limit a model cannot fit a multi-step tool turn
+ * (each step resends the whole context), so a roomier model is preferred.
+ */
+export const HIVE_MIN_TPM = 20_000
+/**
+ * History budget sized for Groq, not Claude. DeepSpace's default (240k chars,
+ * 30k-char tool results) overflows Groq's free-tier 6k-30k tokens per minute.
+ * ~4 chars per token: 16k chars of history + ~2.5k tokens of prompt and tools.
+ */
+export const HIVE_CONTEXT_CONFIG: typeof DEFAULT_CONTEXT_CONFIG = {
+  ...DEFAULT_CONTEXT_CONFIG,
+  contextBudget: 16_000,
+  toolResultCap: 4_000,
+  keepRecentToolResults: 2,
+  minKept: 6,
+}
 
-const SUMMARY_MAX_CHARS = 24_000
+const SUMMARY_MAX_CHARS = 14_000
 
 export interface GroqEnv {
   GROQ_API_KEY?: string
@@ -51,6 +70,25 @@ export class HiveUnavailable extends Error {
 
 export type HiveModels = { main: string; fast: string }
 
+/** A model the key may call, with its tokens-per-minute limit when Groq reported one. */
+export type ProbedModel = { id: string; tpm: number | null }
+
+/**
+ * First candidate (in preference order) with room for a full Hive turn; when
+ * none has, the one with the most tokens per minute. An unknown limit counts
+ * as roomy, so a missing header never demotes a model.
+ */
+export function pickByCapacity(probed: ProbedModel[], minTpm: number): ProbedModel | null {
+  const roomy = probed.find((m) => m.tpm == null || m.tpm >= minTpm)
+  if (roomy) return roomy
+  return probed.reduce<ProbedModel | null>((best, m) => (!best || (m.tpm ?? 0) > (best.tpm ?? 0) ? m : best), null)
+}
+
+function tpmFrom(headers: Record<string, string | undefined> | undefined): number | null {
+  const n = Number(headers?.['x-ratelimit-limit-tokens'])
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /** Order candidates: preferred ids that the key can see first, then any other chat model. */
 export function rankModels(available: string[], prefs: string[]): string[] {
   const chat = available.filter((id) => !NON_CHAT.test(id))
@@ -65,22 +103,35 @@ async function listModels(apiKey: string): Promise<string[]> {
   return (body.data ?? []).filter((m) => typeof m.id === 'string' && m.active !== false).map((m) => m.id as string)
 }
 
-/** One-token call: proves the key may actually use the model (listing is not enough). */
-async function probe(env: GroqEnv, id: string): Promise<boolean> {
+/**
+ * One-token call: proves the key may actually use the model (listing is not
+ * enough) and reads its tokens-per-minute limit from Groq's headers.
+ */
+async function probe(env: GroqEnv, id: string): Promise<ProbedModel | null> {
   try {
-    await generateText({ model: groqModel(env, id), prompt: 'ok', maxOutputTokens: 1, maxRetries: 0, abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
-    return true
+    const r = await generateText({ model: groqModel(env, id), prompt: 'ok', maxOutputTokens: 1, maxRetries: 0, abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+    return { id, tpm: tpmFrom(r.response.headers) }
   } catch (err) {
     // Rate-limited means the model exists and is allowed.
-    if (rateLimitRetryAfter(err) != null) return true
+    if (rateLimitRetryAfter(err) != null) {
+      const inner = err instanceof Error && 'lastError' in err ? (err as { lastError: unknown }).lastError : err
+      return { id, tpm: APICallError.isInstance(inner) ? tpmFrom(inner.responseHeaders) : null }
+    }
     console.error(`[llm] probe ${id} failed: ${(err as Error).message.slice(0, 160)}`)
-    return false
+    return null
   }
 }
 
-async function firstWorking(env: GroqEnv, candidates: string[]): Promise<string | null> {
-  for (const id of candidates) if (await probe(env, id)) return id
-  return null
+/** Probe in order, stopping at the first model with room for a full turn. */
+async function bestWorking(env: GroqEnv, candidates: string[], minTpm: number): Promise<ProbedModel | null> {
+  const probed: ProbedModel[] = []
+  for (const id of candidates) {
+    const m = await probe(env, id)
+    if (!m) continue
+    probed.push(m)
+    if (m.tpm == null || m.tpm >= minTpm) break
+  }
+  return pickByCapacity(probed, minTpm)
 }
 
 let resolved: { at: number; models: Promise<HiveModels> } | null = null
@@ -95,10 +146,12 @@ export function resolveHiveModels(env: GroqEnv): Promise<HiveModels> {
   if (resolved && Date.now() - resolved.at < RESOLVE_TTL_MS) return resolved.models
   const models = (async () => {
     const available = await listModels(apiKey)
-    const main = await firstWorking(env, rankModels(available, MAIN_MODEL_PREFS))
-    if (!main) throw new Error('No Groq chat model is available to this key')
-    const fast = (await firstWorking(env, rankModels(available, FAST_MODEL_PREFS).filter((id) => id !== main).slice(0, 3))) ?? main
-    console.info(`[llm] Hive models: main=${main} fast=${fast} (of ${available.length})`)
+    const best = await bestWorking(env, rankModels(available, MAIN_MODEL_PREFS), HIVE_MIN_TPM)
+    if (!best) throw new Error('No Groq chat model is available to this key')
+    const main = best.id
+    const fastCandidates = rankModels(available, FAST_MODEL_PREFS).filter((id) => id !== main).slice(0, 3)
+    const fast = (await bestWorking(env, fastCandidates, 0))?.id ?? main
+    console.info(`[llm] Hive models: main=${main} (tpm=${best.tpm ?? '?'}) fast=${fast} (of ${available.length})`)
     return { main, fast }
   })()
   resolved = { at: Date.now(), models }
@@ -130,6 +183,13 @@ export function hasGroq(env: GroqEnv): boolean {
   return Boolean(env.GROQ_API_KEY?.trim())
 }
 
+/** Groq refused the request as bigger than the model's tokens-per-minute limit. */
+export function isRequestTooLarge(error: unknown): boolean {
+  const err = error instanceof Error && 'lastError' in error ? (error as { lastError: unknown }).lastError : error
+  if (!APICallError.isInstance(err)) return false
+  return err.statusCode === 413 || /request too large|reduce your message size/i.test(err.responseBody ?? err.message)
+}
+
 /** Groq 429 → seconds to wait (from retry-after), else null. */
 export function rateLimitRetryAfter(error: unknown): number | null {
   const err = error instanceof Error && 'lastError' in error ? (error as { lastError: unknown }).lastError : error
@@ -145,6 +205,11 @@ export function hiveErrorText(error: unknown): string {
     forgetHiveModels()
     return 'Hive switched to a different model. Tap Retry.'
   }
+  if (isRequestTooLarge(error)) {
+    // The cached choice may predate a tier change; re-measure next turn.
+    forgetHiveModels()
+    return 'That was too much for Hive in one go. Start a new chat or ask something shorter.'
+  }
   const wait = rateLimitRetryAfter(error)
   if (wait != null) return `Hive is catching its breath — try again in ${wait}s.`
   // Provider failures (HTTP / retries exhausted) stay generic; tool errors
@@ -154,7 +219,7 @@ export function hiveErrorText(error: unknown): string {
   return 'Hive hit a snag answering that. Try again in a moment.'
 }
 
-/** Cap each tool result before the model sees it (same cap DeepSpace agents use). */
+/** Cap each tool result before the model sees it (Hive's Groq-sized cap). */
 export function capTools<T extends ToolSet>(tools: T): T {
   return Object.fromEntries(
     Object.entries(tools).map(([name, def]) => {
@@ -165,7 +230,7 @@ export function capTools<T extends ToolSet>(tools: T): T {
         {
           ...def,
           execute: async (...args: Parameters<typeof execute>) =>
-            capToolResultSize(await execute(...args), DEFAULT_CONTEXT_CONFIG.toolResultCap),
+            capToolResultSize(await execute(...args), HIVE_CONTEXT_CONFIG.toolResultCap),
         },
       ]
     }),

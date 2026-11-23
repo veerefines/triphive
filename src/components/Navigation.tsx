@@ -15,6 +15,7 @@ import { ChevronDown, LogOut, Menu, X } from 'lucide-react'
 import type { Role } from '../constants'
 import { nav } from '../nav'
 import { cn } from '../lib/utils'
+import { Wordmark } from '@/components/ui/Brand'
 import {
   Avatar,
   AvatarFallback,
@@ -72,7 +73,7 @@ export default function Navigation() {
       <nav data-testid="app-navigation" className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-xl">
         <div className="flex h-14 items-center gap-4 px-6">
           <Link to="/trips" className="text-sm font-semibold text-foreground">
-            <span className="font-display text-lg">🐝 TripHive</span>
+            <Wordmark />
           </Link>
 
           <div className="hidden items-center md:flex">{visibleNav.map(navLink)}</div>

@@ -14,6 +14,7 @@ import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/c
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
 import { useTripMoney } from '@/components/trip/useTripMoney'
+import { BrandMark } from '@/components/ui/Brand'
 
 type SideTab = 'hive' | 'chat' | 'proposals' | 'issues' | 'budget' | 'explore'
 
@@ -411,7 +412,7 @@ export default function TripPage() {
                   }}
                   header={
                     <div className="mx-3 mt-3 flex gap-3 rounded-2xl bg-honey-soft p-3 text-xs text-[#7a3412]">
-                      <span className="text-lg leading-none">🐝</span>
+                      <BrandMark size={22} />
                       <p>
                         <b>Hive</b> researches places, checks weather & routes, and <b>suggests</b> changes. The group votes before anything lands.
                       </p>

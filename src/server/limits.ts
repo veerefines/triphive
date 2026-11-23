@@ -9,6 +9,11 @@
  *    an update instead of failing the request;
  *  - after writing, it re-reads the row and refunds if a concurrent writer
  *    pushed the count past the cap, so overshoot is undone, not accepted.
+ *
+ * Known limit: the store has no atomic increment, so two writers that read
+ * the same count both store count+1 and one increment is lost. Overshoot is
+ * bounded by one subject's in-flight concurrency (and the burst limit makes
+ * that small). A per-subject Durable Object counter would close it.
  */
 import type { ActionTools } from 'deepspace/worker'
 

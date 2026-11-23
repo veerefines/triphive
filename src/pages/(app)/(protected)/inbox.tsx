@@ -7,10 +7,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth, useQuery } from 'deepspace'
-import { ArrowLeft, Check, Lock, MapPin, Send, X } from 'lucide-react'
+import { ArrowLeft, Check, Lock, MapPin, MessagesSquare, Send, X } from 'lucide-react'
 import { cn, useToast } from '@/components/ui'
 import { PersonAvatar, fmtDate, usePeople, type JoinRequest } from '@/components/social'
 import { callAction } from '@/lib/api'
+import { BrandMark } from '@/components/ui/Brand'
 
 type Dm = { requestId: string; senderId: string; text: string }
 
@@ -55,7 +56,7 @@ export default function InboxPage() {
           {status === 'loading' && [0, 1, 2].map((i) => <div key={i} className="skeleton m-2 h-16" />)}
           {status === 'ready' && list.length === 0 && (
             <div className="p-8 text-center">
-              <p className="text-4xl">💌</p>
+              <span className="hex-badge mx-auto flex size-14 items-center justify-center bg-honey/30 text-[#7a3412]"><MessagesSquare className="size-6" aria-hidden="true" /></span>
               <p className="mt-2 font-semibold">{tab === 'requests' ? 'No pending requests' : 'No conversations yet'}</p>
               <p className="mt-1 text-sm text-muted-foreground">Ask to join a trip on Discover, or make one of yours public.</p>
               <Link to="/discover" className="mt-4 inline-flex rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background">Discover trips</Link>
@@ -101,7 +102,7 @@ export default function InboxPage() {
           <Thread key={selected.recordId} thread={selected} me={userId ?? ''} onBack={() => setParams({})} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-10 text-center">
-            <p className="text-5xl">🐝</p>
+            <BrandMark size={64} />
             <p className="font-display mt-3 text-2xl font-semibold">Pick a conversation</p>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">Requests to join your public trips land here. Accept to unlock chat and share the plan.</p>
           </div>

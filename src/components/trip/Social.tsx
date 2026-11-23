@@ -16,6 +16,7 @@ import type { PlaceCard } from '@/ai/hive-group'
 import { HiveCard } from './HiveCard'
 import type { TripMoney } from './useTripMoney'
 import type { Trip } from './types'
+import { HiveAvatar } from '@/components/ui/Brand'
 
 export function VisibilityChip({ visibility, isOwner, onClick }: { visibility?: string; isOwner: boolean; onClick: () => void }) {
   const pub = visibility === 'public'
@@ -206,7 +207,7 @@ export function GroupChat({ tripId, me, nameOf, dates, labelFor, money }: GroupC
           <div className="py-10 text-center">
             <p className="text-3xl">💬</p>
             <p className="mt-1 font-semibold">Group chat</p>
-            <p className="text-sm text-muted-foreground">Say hi to everyone on the trip. 🐝 Hive listens in: agree on a place and it lands in the plan.</p>
+            <p className="text-sm text-muted-foreground">Say hi to everyone on the trip. Hive listens in: agree on a place and it lands in the plan.</p>
           </div>
         )}
         {msgs.map((m, i) => {
@@ -214,7 +215,7 @@ export function GroupChat({ tripId, me, nameOf, dates, labelFor, money }: GroupC
           const mine = m.data.senderId === me
           const showName = !mine && msgs[i - 1]?.data.senderId !== m.data.senderId
           const avatar = isHive ? (
-            <span className={cn('flex size-[26px] shrink-0 items-center justify-center rounded-full bg-honey/25 text-sm', !showName && 'invisible')}>🐝</span>
+            <HiveAvatar className={cn(!showName && 'invisible')} />
           ) : (
             <PersonAvatar uid={m.data.senderId} size={26} className={showName ? '' : 'invisible'} />
           )
@@ -233,7 +234,7 @@ export function GroupChat({ tripId, me, nameOf, dates, labelFor, money }: GroupC
         })}
         {isHiveThinking && (
           <p data-testid="hive-thinking" className="anim-in flex items-center gap-2 pl-1 text-xs text-muted-foreground">
-            <span className="flex size-[26px] items-center justify-center rounded-full bg-honey/25 text-sm">🐝</span>
+            <HiveAvatar />
             <span className="animate-pulse">Hive is reading the chat…</span>
           </p>
         )}

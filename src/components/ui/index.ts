@@ -54,3 +54,4 @@ export {
 } from './DropdownMenu'
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './Tooltip'
 export { Popover, PopoverTrigger, PopoverContent, PopoverClose } from './Popover'
+export { BrandMark, HiveAvatar, Wordmark } from './Brand'

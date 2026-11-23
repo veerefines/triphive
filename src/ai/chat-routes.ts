@@ -176,9 +176,12 @@ export function registerAiChatRoutes(
 
     // TripHive: verify membership BEFORE any model call. The tripId comes from
     // the client, so it is only trusted after requireMember passes.
+    // The app's Groq key pays for every turn, so Hive only runs inside a trip
+    // the caller belongs to (membership checked below). No generic chats.
+    if (typeof tripId !== 'string' || !tripId) return c.json({ error: 'Open a trip to chat with Hive' }, 400)
     let tripTools: ReturnType<typeof buildTripTools> | null = null
     const privileged = createActionTools(c.env, auth.userId, jwt)
-    if (typeof tripId === 'string' && tripId) {
+    {
       try {
         await requireMember(privileged, tripId, auth.userId)
       } catch (err) {

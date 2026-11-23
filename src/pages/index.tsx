@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Seo } from '../components/Seo'
 import { seo } from '../seo'
+import { BrandMark, Wordmark } from '@/components/ui/Brand'
 
 const STEPS = [
   { n: '01', title: 'Start a trip', body: 'Name it, pick a city and dates. TripHive pulls the map and 5-day forecast.' },
@@ -29,7 +30,7 @@ export default function Landing() {
       <div data-testid="static-landing" className="min-h-screen overflow-x-hidden bg-background text-foreground">
         <header className="sticky top-0 z-30 border-b border-border/60 bg-background/70 backdrop-blur-xl">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-            <span className="font-display text-xl font-bold">🐝 TripHive</span>
+            <Wordmark size="lg" />
             <nav className="flex items-center gap-1 text-sm">
               <a href="#how" className="hidden rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
                 How it works
@@ -118,7 +119,7 @@ export default function Landing() {
               </span>
             </Callout>
             <Callout className="bottom-12 left-[10%]" delay={700}>
-              <span className="text-base">🐝</span>
+              <BrandMark size={20} />
               <span>
                 <b>Hive</b> found 3 places near Alfama · ★ 4.6
               </span>

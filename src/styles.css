@@ -256,3 +256,8 @@ body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
 .skeleton { border-radius: 1rem; background: linear-gradient(90deg, var(--color-muted) 0%, color-mix(in oklab, var(--color-muted) 60%, white) 50%, var(--color-muted) 100%); background-size: 800px 100%; animation: th-shimmer 1.4s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .anim-in, .skeleton { animation: none; } }
 .th-pin-active { transform: scale(1.25); z-index: 1000 !important; }
+
+/* Honeycomb badge (matches the hexes in the TripHive logo). */
+.hex-badge {
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0% 50%);
+}

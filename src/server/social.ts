@@ -294,6 +294,25 @@ export async function deleteSocial(tools: ActionTools, tripId: string) {
   await tools.deleteWhere('public_trips', { tripId }, 10)
 }
 
+const DELETE_PAGE = 500
+const MAX_DELETE_PAGES = 20
+
+/**
+ * Delete a trip and everything hanging off it. Shared by deleteTrip and the
+ * owner-only demo reset; callers do their own authorization.
+ */
+export async function purgeTrip(tools: ActionTools, tripId: string) {
+  for (const coll of ['stops', 'prefs', 'issues', 'proposals', 'activity'] as const) {
+    for (let i = 0; i < MAX_DELETE_PAGES; i++) {
+      const r = await tools.deleteWhere(coll, { tripId }, DELETE_PAGE)
+      if (!r.success || (r.data as { deleted: number }).deleted < DELETE_PAGE) break
+    }
+  }
+  await deleteSocial(tools, tripId)
+  await tools.deleteWhere('team_members', { teamId: tripId }, DELETE_PAGE)
+  await tools.remove('trips', tripId)
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }

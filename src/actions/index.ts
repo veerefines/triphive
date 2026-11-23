@@ -27,7 +27,7 @@ import {
 } from '../server/trips'
 import { groupByDate } from '../lib/planCheck'
 import {
-  deleteSocial,
+  purgeTrip,
   refreshListing,
   requestToJoin,
   respondToRequest,
@@ -40,6 +40,7 @@ import {
 } from '../server/social'
 import { safeHref } from '../lib/safeUrl'
 import { placePhotos } from '../server/photos'
+import { seedStep, wipeStep } from '../server/demo'
 
 /** Map thrown TripErrors to `{ success: false }`; let real bugs surface as 500. */
 function safe(fn: (ctx: ActionContext<Env>) => Promise<unknown>): ActionHandler<Env> {
@@ -146,15 +147,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const members = await listMembers(tools, tripId)
     const isOwner = trip.createdBy === userId || members.some((m) => m.data.userId === userId && m.data.role === 'owner')
     if (!isOwner) throw new TripError('Only the trip organizer can delete it')
-    for (const coll of ['stops', 'prefs', 'issues', 'proposals', 'activity'] as const) {
-      for (let i = 0; i < 20; i++) {
-        const r = await tools.deleteWhere(coll, { tripId }, 500)
-        if (!r.success || (r.data as { deleted: number }).deleted < 500) break
-      }
-    }
-    await deleteSocial(tools, tripId)
-    await tools.deleteWhere('team_members', { teamId: tripId }, 500)
-    await tools.remove('trips', tripId)
+    await purgeTrip(tools, tripId)
     return { deleted: true }
   }),
 
@@ -218,4 +211,16 @@ export const actions: Record<string, ActionHandler<Env>> = {
   suggestStop: safe(({ tools, userId, params }) => suggestStop(tools, userId, params)),
   reviewPlace: safe(({ tools, userId, params }) => reviewPlace(tools, userId, params)),
   placePhotos: safe(({ tools, userId, params, env }) => placePhotos(tools, userId, env.GOOGLE_MAPS_API_KEY, params)),
+  /**
+   * Owner-only, irreversible. The client loops phase 'wipe' until done, then
+   * calls phase 'seed' once. `confirm` must be the literal string WIPE.
+   */
+  isAppOwner: safe(async ({ userId, env }) => ({ isOwner: !!env.OWNER_USER_ID && userId === env.OWNER_USER_ID })),
+  resetDemo: safe(async ({ tools, userId, params, env, callerJwt }) => {
+    if (!env.OWNER_USER_ID || userId !== env.OWNER_USER_ID) throw new TripError('Only the app owner can reset the demo')
+    if (params.confirm !== 'WIPE') throw new TripError('Type WIPE to confirm')
+    if (params.phase === 'wipe') return wipeStep(tools, userId)
+    if (params.phase === 'seed') return seedStep(env, userId, callerJwt, new Date().toISOString().slice(0, 10))
+    throw new TripError('Unknown reset phase')
+  }),
 }

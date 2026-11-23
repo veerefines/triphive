@@ -126,7 +126,7 @@ export async function logActivity(tools: ActionTools, tripId: string, actorId: s
 // ---------------------------------------------------------------------------
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-function inviteCode(): string {
+export function inviteCode(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(6))
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('')
 }

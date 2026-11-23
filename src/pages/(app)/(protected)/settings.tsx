@@ -5,6 +5,7 @@
 
 import { signOut, useUser } from 'deepspace'
 import { Button } from '@/components/ui'
+import { DemoReset } from '@/components/settings/DemoReset'
 
 export default function SettingsPage() {
   const { user } = useUser()
@@ -35,6 +36,8 @@ export default function SettingsPage() {
             Sign out
           </Button>
         </section>
+
+        <DemoReset />
       </div>
     </div>
   )

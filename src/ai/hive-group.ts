@@ -33,6 +33,10 @@ const MAX_CARDS_PER_RUN = 2
 const MIN_TEXT_LENGTH = 4
 const TRIP_ID = /^[\w-]{1,80}$/
 export const HIVE_SENDER = 'hive'
+/** Cloudflare cancels waitUntil work ~30s after the response; finish well before. */
+const RUN_DEADLINE_MS = 25_000
+const BUSY_REPLY = "I'm a little swamped right now. Ask me again in a minute and I'll jump in."
+const isTimeout = (err: unknown) => err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
 
 type RequireAccess = (c: Context<AppContext>) => Promise<{ auth: { userId: string } } | Response>
 
@@ -174,8 +178,13 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
   // Newest messages matter most; keep the tail within Hive's Groq budget.
   const transcript = full.length > HIVE_CONTEXT_CONFIG.contextBudget ? full.slice(-HIVE_CONTEXT_CONFIG.contextBudget) : full
   const out = { cards: [] as PlaceCard[], added: [] as string[] }
-  const call = (modelId: string) =>
+  const abortSignal = AbortSignal.timeout(RUN_DEADLINE_MS)
+  // No SDK retry on the main model: a 429 there switches straight to the fast
+  // model, which has its own Groq token budget.
+  const call = (modelId: string, maxRetries: number) =>
     generateText({
+      abortSignal,
+      maxRetries,
       model: groqModel(c.env, modelId),
       instructions: groupPrompt(new Date().toISOString().slice(0, 10)),
       messages: [{ role: 'user', content: `Group chat so far:\n${transcript}` }],
@@ -186,11 +195,11 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
   const models = await resolveHiveModels(c.env)
   let result: Awaited<ReturnType<typeof call>>
   try {
-    result = await call(models.main)
+    result = await call(models.main, 0)
   } catch (err) {
     // Main model rate-limited before doing anything: retry once on the fast one.
     if (rateLimitRetryAfter(err) == null || out.cards.length || out.added.length) throw err
-    result = await call(models.fast)
+    result = await call(models.fast, 1)
   }
   const text = result.text.trim()
   const isQuiet = (!text || /^NOOP\.?$/i.test(text)) && out.cards.length === 0 && out.added.length === 0
@@ -238,7 +247,11 @@ export function registerHiveGroupRoute(app: Hono<AppContext>, requireAccess: Req
     // Finish even if the tab closes: the reply lands in the shared chat.
     const run = runHive(c, tools, tripId, userId, rows).catch(async (err) => {
       console.error(`[hive-group] failed: ${loggableError(err)}`)
-      if (rateLimitRetryAfter(err) != null) await reservation.refund()
+      if (rateLimitRetryAfter(err) == null && !isTimeout(err)) return
+      await reservation.refund()
+      // Say so in the chat instead of leaving "Hive is reading the chat…" hanging.
+      const r = await tools.create('trip_messages', { tripId, senderId: HIVE_SENDER, text: BUSY_REPLY })
+      if (!r.success) console.error(`[hive-group] busy reply write failed: ${r.error}`)
     })
     c.executionCtx.waitUntil(run)
     return c.json({ accepted: true }, 202)

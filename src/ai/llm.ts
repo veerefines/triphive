@@ -8,7 +8,7 @@
  * before calling in here.
  */
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { APICallError, generateText, type LanguageModel, type ToolSet } from 'ai'
+import { APICallError, generateText, wrapLanguageModel, type LanguageModel, type LanguageModelMiddleware, type ToolSet } from 'ai'
 import { DEFAULT_CONTEXT_CONFIG, capToolResultSize, type ChatTurn, type Summarizer } from 'deepspace/worker'
 
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
@@ -173,10 +173,29 @@ export function isModelUnavailable(error: unknown): boolean {
   return err.statusCode === 404 || /model_not_found|does not exist|do not have access/i.test(err.responseBody ?? err.message)
 }
 
+type Prompt = Parameters<NonNullable<LanguageModelMiddleware['transformParams']>>[0]['params']['prompt']
+
+/**
+ * Drop reasoning from earlier assistant turns. The openai-compatible provider
+ * resends it as `reasoning_content`, which Groq rejects with a 400 on the
+ * second step of any tool loop and on any chat with a past reasoning reply.
+ */
+export function stripReasoning(prompt: Prompt): Prompt {
+  return prompt.flatMap<Prompt[number]>((m) => {
+    if (m.role !== 'assistant') return [m]
+    const content = m.content.filter((part) => part.type !== 'reasoning' && part.type !== 'reasoning-file')
+    return content.length ? [{ ...m, content }] : []
+  })
+}
+
+const groqCompat: LanguageModelMiddleware = {
+  transformParams: async ({ params }) => ({ ...params, prompt: stripReasoning(params.prompt) }),
+}
+
 export function groqModel(env: GroqEnv, modelId: string): LanguageModel {
   const apiKey = env.GROQ_API_KEY?.trim()
   if (!apiKey) throw new HiveUnavailable()
-  return createOpenAICompatible({ name: 'groq', baseURL: GROQ_BASE_URL, apiKey })(modelId)
+  return wrapLanguageModel({ model: createOpenAICompatible({ name: 'groq', baseURL: GROQ_BASE_URL, apiKey })(modelId), middleware: groqCompat })
 }
 
 export function hasGroq(env: GroqEnv): boolean {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APICallError } from 'ai'
-import { FAST_MODEL_PREFS, HIVE_CONTEXT_CONFIG, MAIN_MODEL_PREFS, hiveErrorText, isModelUnavailable, isRequestTooLarge, pickByCapacity, rankModels } from './llm'
+import { stripReasoning, FAST_MODEL_PREFS, HIVE_CONTEXT_CONFIG, MAIN_MODEL_PREFS, hiveErrorText, isModelUnavailable, isRequestTooLarge, pickByCapacity, rankModels } from './llm'
 
 function apiError(statusCode: number, responseBody: string) {
   return new APICallError({ message: responseBody, url: 'https://api.groq.com', requestBodyValues: {}, statusCode, responseBody })
@@ -69,5 +69,26 @@ describe('HIVE_CONTEXT_CONFIG', () => {
     // ~4 chars per token; 8k TPM is the smallest main-model limit seen.
     expect(HIVE_CONTEXT_CONFIG.contextBudget / 4).toBeLessThan(8_000)
     expect(HIVE_CONTEXT_CONFIG.toolResultCap).toBeLessThanOrEqual(HIVE_CONTEXT_CONFIG.contextBudget)
+  })
+})
+
+describe('stripReasoning', () => {
+  it('removes reasoning parts from assistant turns and keeps everything else', () => {
+    const prompt = [
+      { role: 'system' as const, content: 'sys' },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'hi' }] },
+      {
+        role: 'assistant' as const,
+        content: [
+          { type: 'reasoning' as const, text: 'thinking' },
+          { type: 'tool-call' as const, toolCallId: 't1', toolName: 'find_place', input: {} },
+        ],
+      },
+      { role: 'assistant' as const, content: [{ type: 'reasoning' as const, text: 'only thoughts' }] },
+    ]
+    const out = stripReasoning(prompt)
+    expect(out).toHaveLength(3)
+    expect(out[2]).toEqual({ role: 'assistant', content: [{ type: 'tool-call', toolCallId: 't1', toolName: 'find_place', input: {} }] })
+    expect(prompt[2].content).toHaveLength(2)
   })
 })

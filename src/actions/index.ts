@@ -26,6 +26,8 @@ import {
   type StopData,
 } from '../server/trips'
 import { groupByDate } from '../lib/planCheck'
+import { buildPlanPdf } from '../lib/planPdf'
+import { LIMITS, reserve } from '../server/limits'
 import {
   purgeTrip,
   refreshListing,
@@ -55,6 +57,14 @@ function safe(fn: (ctx: ActionContext<Env>) => Promise<unknown>): ActionHandler<
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
+const BASE64_CHUNK = 0x8000
+
+/** btoa over chunks: spreading a whole PDF into fromCharCode overflows the stack. */
+function toBase64(bytes: Uint8Array): string {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) bin += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK))
+  return btoa(bin)
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -158,6 +168,8 @@ export const actions: Record<string, ActionHandler<Env>> = {
     const names = await userNames(tools, members.map((m) => m.data.userId))
     const to = Object.values(names).map((n) => n.email).filter((e): e is string => !!e)
     if (to.length === 0) throw new TripError('No member emails on file')
+    const slot = await reserve(tools, `trip:${tripId}`, LIMITS.planEmail)
+    if (!slot.ok) throw new TripError(slot.error)
 
     const stops = await tools.query<StopData>('stops', { where: { tripId }, limit: 500 })
     if (!stops.success) throw new TripError('Could not load stops')
@@ -173,6 +185,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
           return `<h3 style="margin-bottom:4px">${date}${fc ? ` <small style="color:#888">· ${fc.min}–${fc.max}°C ${escapeHtml(fc.desc)}</small>` : ''}</h3>
             <ul style="padding-left:18px;margin-top:0">${list.map((s) => `<li><b>${s.start ?? '—'}${s.end ? `–${s.end}` : ''}</b> ${escapeHtml(s.title)}${s.address ? ` <span style="color:#888">· ${escapeHtml(s.address.split(',').slice(0, 2).join(','))}</span>` : ''}${safeHref(s.url) ? ` · <a href="${escapeHtml(safeHref(s.url)!)}">link</a>` : ''}</li>`).join('')}</ul>`
         }).join('')}
+        <p style="color:#666;font-size:13px">Need it offline? Open the trip in TripHive and tap <b>Download PDF</b>.</p>
         <p style="color:#888;font-size:12px">Sent from TripHive by ${escapeHtml(names[userId]?.name ?? 'a member')}.</p>
       </div>`
     // One email per traveler, so addresses are never disclosed to each other.
@@ -185,9 +198,33 @@ export const actions: Record<string, ActionHandler<Env>> = {
       })
       if (r.success) sent++
     }
-    if (sent === 0) throw new TripError('Email failed')
+    if (sent === 0) {
+      await slot.refund()
+      throw new TripError('Email failed')
+    }
     await logActivity(tools, tripId, userId, `emailed the itinerary to ${sent} traveler(s)`)
     return { sent }
+  }),
+
+  /** Printable itinerary for members, returned as base64 so the client can save it. */
+  planPdf: safe(async ({ tools, userId, params }) => {
+    const tripId = str(params.tripId)
+    const { trip, members } = await requireMember(tools, tripId, userId)
+    const names = await userNames(tools, members.map((m) => m.data.userId))
+    const stops = await tools.query<StopData>('stops', { where: { tripId }, limit: 500 })
+    if (!stops.success) throw new TripError('Could not load stops')
+    const t = trip.data
+    const bytes = await buildPlanPdf({
+      title: t.title,
+      destination: t.destination,
+      startDate: t.startDate,
+      endDate: t.endDate,
+      members: members.map((m) => names[m.data.userId]?.name ?? 'Traveler'),
+      stops: stops.data.records.map((r) => toStopLike(r.recordId, r.data)),
+      forecast: t.forecast ?? null,
+      generatedBy: names[userId]?.name ?? 'a member',
+    })
+    return { base64: toBase64(bytes), filename: `${t.title.replace(/[^\w\- ]+/g, '').trim() || 'itinerary'}.pdf` }
   }),
 
   /** Members list with display names (team_members rows only carry ids). */

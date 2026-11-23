@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getUserColor, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
-import { ArrowLeft, Bot, CloudSun, Copy, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
+import { ArrowLeft, Bot, CloudSun, Copy, FileDown, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
 import { ItineraryDay, StopModal, weekday } from '@/components/trip/Board'
@@ -11,7 +11,7 @@ import { TripChatContext } from '@/components/trip/PlaceCards'
 import { TripBudget } from '@/components/trip/TripBudget'
 import { ExplorePanel, GroupChat, VisibilityChip, VisibilityModal } from '@/components/trip/Social'
 import type { Activity, IssueRow, Member, Pref, Proposal, Stop, Trip } from '@/components/trip/types'
-import { callAction } from '@/lib/api'
+import { callAction, downloadPlanPdf } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
 import { useTripMoney } from '@/components/trip/useTripMoney'
 import { BrandMark } from '@/components/ui/Brand'
@@ -237,6 +237,9 @@ export default function TripPage() {
             </Button>
             <Button size="sm" variant="outline" loading={busy === 'Email'} onClick={() => run('Email', () => callAction('emailItinerary', { tripId }), 'Itinerary emailed to the group')}>
               <Mail /> Email plan
+            </Button>
+            <Button size="sm" variant="outline" loading={busy === 'PDF'} onClick={() => run('PDF', () => downloadPlanPdf(tripId), 'PDF downloaded')}>
+              <FileDown /> Download PDF
             </Button>
             {isOwner ? (
               <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmDelete(true)}>

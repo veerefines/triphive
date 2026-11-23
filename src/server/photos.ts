@@ -39,10 +39,22 @@ interface PhotoSet {
   source: Source
 }
 
-/** Cache key: normalized "query|near|max". */
+/**
+ * Cache key: normalized "query|near|max|lat,lng". The location bias changes
+ * which place Google returns, so it is part of the key (rounded to ~11 km)
+ * and one caller's bias cannot poison another's entry.
+ */
 export function photoKey(q: PhotoQuery): string {
   const norm = (s: string) => s.toLowerCase().normalize('NFKD').replace(/\p{M}+/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
-  return `${norm(q.q)}|${norm(q.near ?? '')}|${q.max ?? 1}`
+  const hasBias = typeof q.lat === 'number' && typeof q.lng === 'number'
+  const bias = hasBias ? `${q.lat!.toFixed(1)},${q.lng!.toFixed(1)}` : ''
+  return `${norm(q.q)}|${norm(q.near ?? '')}|${q.max ?? 1}|${bias}`
+}
+
+/** Bias rounded to the key's precision, so every caller sharing a key sends the same request. */
+function canonicalBias(q: PhotoQuery): PhotoQuery {
+  if (typeof q.lat !== 'number' || typeof q.lng !== 'number') return { ...q, lat: undefined, lng: undefined }
+  return { ...q, lat: Number(q.lat.toFixed(1)), lng: Number(q.lng.toFixed(1)) }
 }
 
 /** Only https image URLs from the two CDNs we resolve to are passed to the client. */
@@ -146,31 +158,46 @@ async function writeCache(tools: ActionTools, key: string, existing: CacheRow | 
   if (!res.success) console.error(`[photos] cache write failed for ${JSON.stringify(key)}`)
 }
 
-async function resolveOne(tools: ActionTools, userId: string, googleKey: string | undefined, q: PhotoQuery, now: number): Promise<string[]> {
-  const key = photoKey(q)
-  const cached = await readCache(tools, key)
-  if (cached && isFresh(cached, now)) return cached.urls
-  const budget = await reserveAll(tools, [['app', LIMITS.photos], [userId, LIMITS.photosUser]])
-  if (!budget.ok) return cached?.urls ?? [] // stale beats nothing
-  const set = await lookup(googleKey, q)
-  await writeCache(tools, key, cached, set, now)
-  return set.urls
-}
+type Miss = { key: string; query: PhotoQuery; stale: CacheRow | null }
 
-/** `placePhotos` action: one photo list per query, in order. */
+/**
+ * `placePhotos` action: one photo list per query, in order.
+ * Cache hits are free. All misses in the batch are reserved in ONE call
+ * (units = distinct misses) before any lookup runs, so a batch cannot fan
+ * out concurrent reservations past the cap.
+ */
 export async function placePhotos(tools: ActionTools, userId: string, googleKey: string | undefined, params: unknown): Promise<{ photos: string[][] }> {
   const parsed = paramsSchema.safeParse(params)
   if (!parsed.success) throw new TripError('Bad photo request')
   const now = Date.now()
-  const photos = await Promise.all(
-    parsed.data.queries.map(async (raw) => {
-      const q = photoQuerySchema.safeParse(raw)
-      if (!q.success) return []
-      return resolveOne(tools, userId, googleKey, q.data, now).catch((err) => {
-        console.error(`[photos] lookup failed: ${(err as Error).message}`)
-        return []
-      })
-    }),
-  )
-  return { photos }
+  const queries = parsed.data.queries.map((raw) => {
+    const q = photoQuerySchema.safeParse(raw)
+    return q.success ? canonicalBias(q.data) : null
+  })
+  const keys = queries.map((q) => (q ? photoKey(q) : null))
+  const distinct = [...new Set(keys.filter((k): k is string => k !== null))]
+
+  const cached = new Map(await Promise.all(distinct.map(async (k) => [k, await readCache(tools, k).catch(() => null)] as const)))
+  const misses: Miss[] = distinct
+    .filter((k) => { const row = cached.get(k); return !row || !isFresh(row, now) })
+    .map((k) => ({ key: k, query: queries[keys.indexOf(k)]!, stale: cached.get(k) ?? null }))
+
+  const results = new Map<string, string[]>(distinct.map((k) => [k, cached.get(k)?.urls ?? []]))
+  if (misses.length) {
+    const budget = await reserveAll(tools, [['app', LIMITS.photos], [userId, LIMITS.photosUser]], misses.length)
+    if (budget.ok) {
+      await Promise.all(
+        misses.map(async (m) => {
+          try {
+            const set = await lookup(googleKey, m.query)
+            await writeCache(tools, m.key, m.stale, set, now)
+            results.set(m.key, set.urls)
+          } catch (err) {
+            console.error(`[photos] lookup failed: ${(err as Error).message}`)
+          }
+        }),
+      )
+    } // over budget: stale urls (already in results) beat nothing
+  }
+  return { photos: keys.map((k) => (k ? results.get(k) ?? [] : [])) }
 }

@@ -110,10 +110,10 @@ export async function reserve(tools: ActionTools, subject: string, limit: Limit,
 }
 
 /** Reserve several limits in order; on any denial, refund the ones already taken. */
-export async function reserveAll(tools: ActionTools, claims: Array<[subject: string, limit: Limit]>): Promise<Reservation> {
+export async function reserveAll(tools: ActionTools, claims: Array<[subject: string, limit: Limit]>, units = 1): Promise<Reservation> {
   const taken: Array<() => Promise<void>> = []
   for (const [subject, limit] of claims) {
-    const r = await reserve(tools, subject, limit)
+    const r = await reserve(tools, subject, limit, units)
     if (!r.ok) {
       await Promise.all(taken.map((f) => f()))
       return r

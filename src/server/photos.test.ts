@@ -41,6 +41,12 @@ describe('photoKey', () => {
   test('normalizes case, accents and punctuation', () => {
     expect(photoKey({ q: 'Torre de Belém!', near: 'Lisbon' })).toBe(photoKey({ q: 'torre de belem', near: 'LISBON' }))
   })
+  test('location bias is part of the key, rounded to ~11 km', () => {
+    const lisbon = photoKey({ q: 'Cafe Central', lat: 38.72, lng: -9.14 })
+    expect(photoKey({ q: 'Cafe Central', lat: 38.74, lng: -9.13 })).toBe(lisbon)
+    expect(photoKey({ q: 'Cafe Central', lat: 48.21, lng: 16.37 })).not.toBe(lisbon)
+    expect(photoKey({ q: 'Cafe Central' })).not.toBe(lisbon)
+  })
   test('max is part of the key', () => {
     expect(photoKey({ q: 'x y', max: 4 })).not.toBe(photoKey({ q: 'x y', max: 1 }))
   })
@@ -85,5 +91,23 @@ describe('placePhotos', () => {
     mockWikipedia()
     const r = await placePhotos(tools, 'u1', undefined, { queries: [{ q: 'x' }, { q: 'Belem Tower', lat: null }] })
     expect(r.photos).toEqual([[], [WIKI_IMG]])
+  })
+
+  test('a batch reserves all its misses in one call and dedupes repeated queries', async () => {
+    const { tools, tables } = fakeTools()
+    mockWikipedia()
+    await placePhotos(tools, 'u1', undefined, { queries: [{ q: 'Belem Tower' }, { q: 'belem tower' }, { q: 'Jeronimos Monastery' }] })
+    const userRow = tables.ai_usage.find((r) => r.data.userId === 'u1')
+    expect(userRow?.data.count).toBe(2)
+  })
+
+  test('denied budget serves no new lookups', async () => {
+    const { tools, tables } = fakeTools()
+    const fetchMock = mockWikipedia()
+    const day = new Date().toISOString().slice(0, 10)
+    tables.ai_usage = [{ recordId: 'x', data: { userId: 'u1', day: `photos-user:${day}`, count: 200 } }]
+    const r = await placePhotos(tools, 'u1', undefined, { queries: [{ q: 'Belem Tower' }] })
+    expect(r.photos).toEqual([[]])
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

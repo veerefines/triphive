@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from 'deepspace'
 import { Globe2, Lock, Send } from 'lucide-react'
 import { Button, Label, Modal, Textarea, cn, useToast } from '@/components/ui'
-import { FeaturedCard, PersonAvatar, PublicTripCard, VIBES, VIBE_EMOJI, type Listing } from '@/components/social'
+import { FeaturedCard, PersonAvatar, ProfilePeek, PublicTripCard, VIBES, VIBE_EMOJI, type Listing } from '@/components/social'
 import { featuredNear } from '@/data/featured'
 import { callAction } from '@/lib/api'
 import { matchLabel, matchTrips } from '@/lib/match'
@@ -218,7 +218,9 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
           const avatar = isHive ? (
             <HiveAvatar className={cn(!showName && 'invisible')} />
           ) : (
-            <PersonAvatar uid={m.data.senderId} size={26} className={showName ? '' : 'invisible'} />
+            <ProfilePeek uid={m.data.senderId} className={showName ? '' : 'invisible'}>
+              <PersonAvatar uid={m.data.senderId} size={26} />
+            </ProfilePeek>
           )
           return (
             <div key={m.recordId} className={cn('flex items-end gap-2', mine && 'flex-row-reverse')}>

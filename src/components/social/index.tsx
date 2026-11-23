@@ -10,6 +10,7 @@ import { cn } from '@/components/ui'
 import type { FeaturedPlace } from '@/data/featured'
 import { DestinationCover } from './DestinationCover'
 import { PlaceImage } from '@/components/ui/PlaceImage'
+import { ProfilePeek } from './ProfilePeek'
 
 export type Profile = {
   userId: string
@@ -152,13 +153,13 @@ export function PublicTripCard({
           </div>
         )}
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-          <Link to={`/people/${l.ownerId}`} className="flex min-w-0 items-center gap-2 text-sm hover:underline">
+          <ProfilePeek uid={l.ownerId} className="flex min-w-0 items-center gap-2 text-sm hover:underline">
             <PersonAvatar uid={l.ownerId} size={26} />
             <span className="truncate">
               <span className="text-muted-foreground">Hosted by </span>
-              {host.name}
+              {l.hostName || host.name}
             </span>
-          </Link>
+          </ProfilePeek>
           {action}
         </div>
       </div>
@@ -203,3 +204,5 @@ export function FeaturedCard({ place: f, action, compact = false }: { place: Fea
     </div>
   )
 }
+
+export { ProfilePeek } from './ProfilePeek'

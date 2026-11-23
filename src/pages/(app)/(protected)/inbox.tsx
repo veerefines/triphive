@@ -9,7 +9,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth, useQuery } from 'deepspace'
 import { ArrowLeft, Check, Lock, MapPin, MessagesSquare, Send, X } from 'lucide-react'
 import { cn, useToast } from '@/components/ui'
-import { PersonAvatar, fmtDate, usePeople, type JoinRequest } from '@/components/social'
+import { PersonAvatar, ProfilePeek, fmtDate, usePeople, type JoinRequest } from '@/components/social'
 import { callAction } from '@/lib/api'
 import { BrandMark } from '@/components/ui/Brand'
 
@@ -170,7 +170,9 @@ function Thread({ thread: t, me, onBack }: { thread: { recordId: string; data: J
         <button type="button" onClick={onBack} aria-label="Back" className="rounded-full p-1.5 hover:bg-muted md:hidden">
           <ArrowLeft className="size-4" />
         </button>
-        <PersonAvatar uid={other} size={40} />
+        <ProfilePeek uid={other}>
+          <PersonAvatar uid={other} size={40} />
+        </ProfilePeek>
         <div className="min-w-0 flex-1">
           <Link to={`/people/${other}`} className="font-semibold hover:underline">{p.name}</Link>
           <p className="truncate text-xs text-muted-foreground">

@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useQuery } from 'deepspace'
 import { ArrowLeft, CalendarDays, Lock, MapPin, MessageCircle, Send, Users } from 'lucide-react'
 import { Button, useToast } from '@/components/ui'
-import { FeaturedCard, PersonAvatar, VIBE_EMOJI, fmtDate, usePeople, type JoinRequest, type Listing } from '@/components/social'
+import { FeaturedCard, PersonAvatar, ProfilePeek, VIBE_EMOJI, fmtDate, usePeople, type JoinRequest, type Listing } from '@/components/social'
 import { DestinationCover } from '@/components/social/DestinationCover'
 import { featuredNear } from '@/data/featured'
 import { callAction } from '@/lib/api'
@@ -130,14 +130,14 @@ export default function PublicTripPage() {
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <Link to={`/people/${l.ownerId}`} className="card-lift flex items-center gap-3 rounded-3xl border border-border bg-card p-4">
+          <ProfilePeek uid={l.ownerId} className="card-lift flex w-full items-center gap-3 rounded-3xl border border-border bg-card p-4">
             <PersonAvatar uid={l.ownerId} size={52} />
             <div className="min-w-0">
               <p className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-foreground">Your host</p>
-              <p className="font-display truncate text-lg font-semibold">{host.name}</p>
+              <p className="font-display truncate text-lg font-semibold">{l.hostName || host.name}</p>
               <p className="truncate text-xs text-muted-foreground">{host.profile?.homeCity ? `From ${host.profile.homeCity}` : 'View profile'}{host.profile?.travelStyle ? ` · ${host.profile.travelStyle}` : ''}</p>
             </div>
-          </Link>
+          </ProfilePeek>
 
           {l.ownerId === userId || isMember ? (
             <Link to={`/trips/${tripId}`} className="flex items-center justify-center gap-2 rounded-3xl bg-foreground p-4 text-sm font-semibold text-background">

@@ -8,7 +8,7 @@ import { useAuth, useQuery } from 'deepspace'
 import { ArrowLeft, CalendarDays, Lock, MapPin, MessageCircle, Send, Users } from 'lucide-react'
 import { Button, useToast } from '@/components/ui'
 import { FeaturedCard, PersonAvatar, VIBE_EMOJI, fmtDate, usePeople, type JoinRequest, type Listing } from '@/components/social'
-import { MapCover } from '@/components/social/MapCover'
+import { DestinationCover } from '@/components/social/DestinationCover'
 import { featuredNear } from '@/data/featured'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
@@ -64,9 +64,15 @@ export default function PublicTripPage() {
         <ArrowLeft className="size-4" /> Discover
       </Link>
       <div className="group relative h-64 overflow-hidden rounded-[28px] border border-border bg-muted sm:h-80">
-        <MapCover lat={l.lat} lng={l.lng} rx={2} ry={1} />
+        <DestinationCover
+          destination={l.destination}
+          lat={l.lat}
+          lng={l.lng}
+          rx={2}
+          ry={1}
+          pin={<span className="absolute left-1/2 top-[40%] block size-4 -translate-x-1/2 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow-lg" />}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-        <span className="absolute left-1/2 top-[40%] block size-4 -translate-x-1/2 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow-lg" />
         <div className="absolute inset-x-0 bottom-0 p-6 text-white">
           <p className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.16em] text-white/80">
             <MapPin className="size-3" /> {l.destination}

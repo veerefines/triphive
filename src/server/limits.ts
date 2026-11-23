@@ -35,8 +35,10 @@ export const LIMITS = {
   burst: { kind: 'burst', cap: 8, window: 'minute' },
   /** Google Places lookups per user per day. */
   places: { kind: 'places', cap: 100, window: 'day' },
-  /** Proxied Google photo fetches per app per day (cache absorbs repeats). */
-  photos: { kind: 'photos', cap: 300, window: 'day' },
+  /** Uncached place-photo lookups per app per day (the place_photos cache absorbs repeats). */
+  photos: { kind: 'photos', cap: 600, window: 'day' },
+  /** Uncached place-photo lookups per user per day, so one account cannot drain the app budget. */
+  photosUser: { kind: 'photos-user', cap: 200, window: 'day' },
   /** Join requests per user per day. */
   requests: { kind: 'requests', cap: 10, window: 'day' },
   /** Plan emails per trip per hour. */

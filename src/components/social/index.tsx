@@ -8,7 +8,8 @@ import { getUserColor, useQuery, useUsers } from 'deepspace'
 import { BadgeCheck, CalendarDays, MapPin, Star, Users } from 'lucide-react'
 import { cn } from '@/components/ui'
 import type { FeaturedPlace } from '@/data/featured'
-import { MapCover } from './MapCover'
+import { DestinationCover } from './DestinationCover'
+import { PlaceImage } from '@/components/ui/PlaceImage'
 
 export type Profile = {
   userId: string
@@ -113,9 +114,13 @@ export function PublicTripCard({
   return (
     <div className="anim-in group/pt overflow-hidden rounded-3xl border border-border bg-card card-lift" style={{ animationDelay: `${delay}ms` }} data-testid="public-trip">
       <Link to={`/discover/${l.tripId}`} className="group relative block h-40 overflow-hidden bg-muted">
-        <MapCover lat={l.lat} lng={l.lng} />
+        <DestinationCover
+          destination={l.destination}
+          lat={l.lat}
+          lng={l.lng}
+          pin={<span className="absolute left-1/2 top-[45%] block size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow" />}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
-        <span className="absolute left-1/2 top-[45%] block size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow" />
         {badge && (
           <span className="absolute left-3 top-3 rounded-full bg-[var(--color-honey)] px-2.5 py-1 font-mono text-[10.5px] font-semibold text-white shadow">
             {badge}
@@ -165,9 +170,10 @@ export function FeaturedCard({ place: f, action, compact = false }: { place: Fea
   const emoji = { food: '🍽️', sight: '🏛️', activity: '🎟️', stay: '🛏️' }[f.category]
   return (
     <div data-testid="featured-place" className={cn('relative flex shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-card', compact ? 'w-64' : 'w-72')}>
-      <div className="relative flex h-24 items-end bg-gradient-to-br from-[var(--color-honey-soft)] to-[var(--color-muted)] p-3">
-        <span className="absolute right-3 top-3 text-4xl opacity-80">{emoji}</span>
-        <span className="inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 font-mono text-[10.5px] font-semibold text-background">
+      <div className="group relative flex h-32 items-end overflow-hidden bg-gradient-to-br from-[var(--color-honey-soft)] to-[var(--color-muted)] p-3">
+        <PlaceImage query={{ q: f.name, near: f.city, lat: f.lat, lng: f.lng }} alt={f.name} emoji={emoji} className="absolute inset-0" imgClassName="group-hover:scale-105" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+        <span className="relative inline-flex items-center gap-1 rounded-full bg-foreground px-2.5 py-1 font-mono text-[10.5px] font-semibold text-background">
           <BadgeCheck className="size-3.5 text-[var(--color-honey)]" /> TripHive Verified
         </span>
       </div>

@@ -5,6 +5,7 @@ import { Button, Input, Label, Modal, Textarea, cn, useToast } from '@/component
 import { googleDirectionsUrl, hasCoords, routeLegs } from '@/lib/geo'
 import { sortDay, toMinutes } from '@/lib/planCheck'
 import { callAction } from '@/lib/api'
+import { PlaceImage } from '@/components/ui/PlaceImage'
 import { CATEGORY_META, type IssueRow, type Stop, type Trip } from './types'
 
 type Peer = { userId: string; userName: string; state: Record<string, unknown> }
@@ -127,6 +128,7 @@ export function ItineraryDay({
               </span>
               <StopCard
                 stop={s.record}
+                destination={trip.destination}
                 active={activeStopId === s.id}
                 flagged={flagged.has(s.id)}
                 editors={editors.map((e) => e.userName)}
@@ -155,7 +157,7 @@ export function ItineraryDay({
   )
 }
 
-function StopCard({ stop, active, flagged, editors, onClick }: { stop: RecordData<Stop>; active?: boolean; flagged: boolean; editors: string[]; onClick: () => void }) {
+function StopCard({ stop, destination, active, flagged, editors, onClick }: { stop: RecordData<Stop>; destination: string; active?: boolean; flagged: boolean; editors: string[]; onClick: () => void }) {
   const d = stop.data
   const meta = CATEGORY_META[d.category ?? 'other'] ?? CATEGORY_META.other
   return (
@@ -164,15 +166,20 @@ function StopCard({ stop, active, flagged, editors, onClick }: { stop: RecordDat
       onClick={onClick}
       data-testid="stop-card"
       className={cn(
-        'card-lift relative flex w-full items-center gap-3 rounded-2xl border bg-card p-2.5 text-left',
+        'card-lift group relative flex w-full items-center gap-3 rounded-2xl border bg-card p-2.5 text-left',
         flagged ? 'border-warning/60' : 'border-transparent',
         active && 'border-foreground/30 shadow-[var(--shadow-card-hover)]',
         editors.length > 0 && 'ring-2 ring-info/50',
       )}
     >
-      <div className="flex size-14 shrink-0 items-center justify-center rounded-xl text-2xl" style={{ background: `${meta.color}18` }}>
-        {meta.emoji}
-      </div>
+      <PlaceImage
+        query={d.category === 'transport' ? null : { q: d.title, near: destination, lat: d.lat, lng: d.lng }}
+        alt={d.title}
+        emoji={meta.emoji}
+        color={meta.color}
+        className="size-16 shrink-0 rounded-xl"
+        imgClassName="group-hover:scale-105"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <p className="truncate font-semibold leading-snug">{d.title}</p>

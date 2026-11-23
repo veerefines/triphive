@@ -433,7 +433,7 @@ export default function TripPage() {
                 }}
               />
             )}
-            {side === 'chat' && <GroupChat tripId={tripId} me={userId ?? ''} nameOf={nameOf} dates={dates} labelFor={(d) => `Day ${dates.indexOf(d) + 1} · ${weekday(d, { weekday: 'short', month: 'short', day: 'numeric' })}`} money={money} />}
+            {side === 'chat' && <GroupChat tripId={tripId} destination={trip.data.destination} me={userId ?? ''} nameOf={nameOf} dates={dates} labelFor={(d) => `Day ${dates.indexOf(d) + 1} · ${weekday(d, { weekday: 'short', month: 'short', day: 'numeric' })}`} money={money} />}
             {side === 'budget' && <TripBudget trip={t} stops={stops} dates={dates} money={money} homeCity={myProfiles[0]?.data.homeCity} />}
             {side === 'explore' && (
               <>

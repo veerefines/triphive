@@ -38,6 +38,7 @@ import {
   suggestStop,
 } from '../server/social'
 import { safeHref } from '../lib/safeUrl'
+import { placePhotos } from '../server/photos'
 
 /** Map thrown TripErrors to `{ success: false }`; let real bugs surface as 500. */
 function safe(fn: (ctx: ActionContext<Env>) => Promise<unknown>): ActionHandler<Env> {
@@ -216,4 +217,5 @@ export const actions: Record<string, ActionHandler<Env>> = {
   sendTripMessage: safe(({ tools, userId, params }) => sendTripMessage(tools, userId, params)),
   suggestStop: safe(({ tools, userId, params }) => suggestStop(tools, userId, params)),
   reviewPlace: safe(({ tools, userId, params }) => reviewPlace(tools, userId, params)),
+  placePhotos: safe(({ tools, userId, params, env }) => placePhotos(tools, userId, env.GOOGLE_MAPS_API_KEY, params)),
 }

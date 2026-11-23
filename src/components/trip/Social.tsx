@@ -146,6 +146,7 @@ const HIVE_WAIT_MS = 45_000
 
 interface GroupChatProps {
   tripId: string
+  destination: string
   me: string
   nameOf: (uid: string) => string
   dates: string[]
@@ -161,7 +162,7 @@ async function pingHive(tripId: string): Promise<{ accepted?: boolean; error?: s
   return res.ok ? body : { error: body.error ?? `Hive unavailable (${res.status})` }
 }
 
-export function GroupChat({ tripId, me, nameOf, dates, labelFor, money }: GroupChatProps) {
+export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, money }: GroupChatProps) {
   const toast = useToast()
   const { records } = useQuery<TripMsg>('trip_messages', { where: { tripId } })
   const [text, setText] = useState('')
@@ -227,7 +228,7 @@ export function GroupChat({ tripId, me, nameOf, dates, labelFor, money }: GroupC
                 <p data-testid="group-msg" className={cn('whitespace-pre-wrap rounded-3xl px-3.5 py-2 text-sm', mine ? 'rounded-br-md bg-foreground text-background' : isHive ? 'rounded-bl-md bg-honey/15' : 'rounded-bl-md bg-muted')}>
                   {m.data.text}
                 </p>
-                {isHive && (m.data.cards ?? []).map((c) => <HiveCard key={c.name} card={c} tripId={tripId} dates={dates} labelFor={labelFor} money={money} />)}
+                {isHive && (m.data.cards ?? []).map((c) => <HiveCard key={c.name} card={c} tripId={tripId} destination={destination} dates={dates} labelFor={labelFor} money={money} />)}
               </div>
             </div>
           )

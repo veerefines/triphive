@@ -5,7 +5,7 @@ import { ArrowRight, CalendarDays, LogOut, MapPin, Plus, Ticket, Trash2 } from '
 import { Button, ConfirmModal, Input, Label, useToast } from '@/components/ui'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
-import { MapCover } from '@/components/social/MapCover'
+import { DestinationCover } from '@/components/social/DestinationCover'
 
 type Trip = { title: string; destination: string; startDate: string; endDate: string; lat?: number; lng?: number; visibility?: string }
 
@@ -328,12 +328,20 @@ function TripCard({
           feature ? 'h-72 rounded-[28px] sm:h-80' : 'h-56 rounded-3xl'
         } ${variant === 'past' ? 'grayscale-[0.7] hover:grayscale-0' : ''}`}
       >
-        <MapCover lat={t.lat} lng={t.lng} z={feature ? 13 : 13} rx={feature ? 2 : 1} ry={1} />
+        <DestinationCover
+          destination={t.destination}
+          lat={t.lat}
+          lng={t.lng}
+          rx={feature ? 2 : 1}
+          ry={1}
+          pin={
+            <span className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2">
+              <span className="absolute inset-0 animate-ping rounded-full bg-[var(--color-honey)] opacity-40 motion-reduce:hidden" />
+              <span className="relative block size-4 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow-lg" />
+            </span>
+          }
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-black/0" />
-        <span className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2">
-          <span className="absolute inset-0 animate-ping rounded-full bg-[var(--color-honey)] opacity-40 motion-reduce:hidden" />
-          <span className="relative block size-4 rounded-full border-[3px] border-white bg-[var(--color-honey)] shadow-lg" />
-        </span>
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 font-mono text-[11px] font-semibold text-[#1c1814] shadow-sm backdrop-blur">
           {countdown(t.startDate, t.endDate)}
         </span>

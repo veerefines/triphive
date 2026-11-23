@@ -133,7 +133,27 @@ export const placeReviewsSchema: CollectionSchema = {
   },
 }
 
+/**
+ * Resolved place photo URLs (Google Places photo CDN or Wikimedia), cached so
+ * repeat views cost no API calls. Written only by the placePhotos action.
+ */
+export const placePhotosSchema: CollectionSchema = {
+  name: 'place_photos',
+  columns: [
+    { name: 'placeKey', storage: 'text', interpretation: 'plain', required: true },
+    { name: 'urls', storage: 'text', interpretation: { kind: 'json' } }, // string[]
+    { name: 'source', storage: 'text', interpretation: 'plain' }, // google | wikipedia | none
+    { name: 'fetchedAt', storage: 'number', interpretation: 'plain' },
+  ],
+  uniqueOn: ['placeKey'],
+  permissions: {
+    member: { read: false, ...SERVER_ONLY },
+    admin: ADMIN,
+  },
+}
+
 export const socialSchemas: CollectionSchema[] = [
+  placePhotosSchema,
   placeReviewsSchema,
   profilesSchema,
   publicTripsSchema,

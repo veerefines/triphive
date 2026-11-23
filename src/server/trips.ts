@@ -10,6 +10,7 @@
 import type { ActionTools } from 'deepspace/worker'
 import { googlePlacesSearch } from './google'
 import { checkPlan, summarizeForecast, tripDates, type DayForecast, type Issue, type PrefLike, type StopLike } from '../lib/planCheck'
+import { LIMITS, reserve } from './limits.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -176,7 +177,7 @@ export async function joinTrip(tools: ActionTools, userId: string, code: unknown
 }
 
 // ---------------------------------------------------------------------------
-// Plan Doctor
+// Plan check (Hive's deterministic checks)
 // ---------------------------------------------------------------------------
 
 export function toStopLike(id: string, d: Partial<StopData>): StopLike {
@@ -277,27 +278,16 @@ export async function geocodePlace(query: string, near?: { lat?: number; lng?: n
   }))
 }
 
-/** Google lookups per user per UTC day (owner-billed). */
-export const GOOGLE_DAILY_LOOKUPS = 100
-
 /**
  * Returns a function that hands out the Google key for ONE lookup, reserving a
- * unit in the server-only ai_usage counter (bucket "places:<day>"). Past the
- * cap, or with no key configured, it returns undefined → OSM fallback.
+ * unit of LIMITS.places (src/server/limits.ts). Past the cap, or with no key
+ * configured, it returns undefined → OSM fallback.
  */
 export function googleGate(tools: ActionTools, userId: string, key: string | undefined) {
   return async (): Promise<string | undefined> => {
     if (!key) return undefined
-    const day = `places:${new Date().toISOString().slice(0, 10)}`
-    const r = await tools.query<{ count: number }>('ai_usage', { where: { userId, day }, limit: 1 })
-    if (!r.success) return undefined
-    const row = r.data.records[0]
-    const used = Number(row?.data.count ?? 0)
-    if (used >= GOOGLE_DAILY_LOOKUPS) return undefined
-    const ok = row
-      ? await tools.update('ai_usage', row.recordId, { count: used + 1 })
-      : await tools.create('ai_usage', { userId, day, count: 1 })
-    return ok.success ? key : undefined
+    const r = await reserve(tools, userId, LIMITS.places)
+    return r.ok ? key : undefined
   }
 }
 

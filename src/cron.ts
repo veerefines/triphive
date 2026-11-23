@@ -2,7 +2,7 @@
  * Scheduled tasks — run by AppCronRoom (worker.ts).
  *
  * weather-watch: every morning, for trips starting within the 5-day forecast
- * window, refresh the forecast and re-run Plan Doctor. If a NEW rain conflict
+ * window, refresh the forecast and re-run the plan check. If a NEW rain conflict
  * appears (an outdoor stop on a now-rainy day), email the trip's travelers.
  * Runs as the app owner through the same trip service the actions use.
  */

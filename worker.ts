@@ -128,6 +128,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   ALLOW_DEBUG_ROUTES?: string
   /** Optional: Google Places (New) key for ratings. `npx deepspace secrets set GOOGLE_MAPS_API_KEY=...` */
   GOOGLE_MAPS_API_KEY?: string
+  /** Groq key for every Hive LLM call (src/ai/llm.ts). `npx deepspace secrets set GROQ_API_KEY`. */
+  GROQ_API_KEY?: string
 }
 
 export type AppContext = { Bindings: Env }

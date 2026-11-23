@@ -277,7 +277,7 @@ function describeTool(
     case 'get_weather':
       return { label: 'Checking the forecast' }
     case 'check_plan':
-      return { label: 'Running Plan Doctor' }
+      return { label: 'Hive is checking the plan' }
     case 'estimate_route':
       return { label: 'Estimating route for', path: typeof values?.date === 'string' ? values.date : undefined }
     case 'optimize_day':

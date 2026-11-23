@@ -1,5 +1,5 @@
 /**
- * AI chat routes — multi-turn tool-use via Vercel AI SDK + DeepSpace proxy.
+ * AI chat routes — multi-turn tool-use via Vercel AI SDK on Groq (src/ai/llm.ts).
  *
  * Registers four endpoints on the passed-in Hono app:
  *   POST   /api/ai/chats       — create a chat owned by the caller
@@ -13,16 +13,11 @@
  */
 
 import type { Context, Hono } from 'hono'
-import { createUIMessageStreamResponse, toUIMessageStream, type ModelMessage } from 'ai'
+import { createUIMessageStreamResponse, isStepCount, streamText, toUIMessageStream, type ModelMessage } from 'ai'
 import {
-  deepSpaceAgentErrorSummary,
   prepareMessagesWithCompaction,
-  listDeepSpaceAgentModels,
-  resolveDeepSpaceAgentModel,
-  streamDeepSpaceAgent,
   turnsToCoreMessages,
   buildUiParts,
-  makeDefaultSummarizer,
   createUserToolExecutor,
   DEFAULT_CONTEXT_CONFIG,
   getChat,
@@ -39,7 +34,9 @@ import { buildSystemPrompt } from './tools.js'
 import { buildTripTools, tripSystemPrompt } from './trip-tools.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, requireMember } from '../server/trips.js'
-import { registerHiveGroupRoute, reserveHiveTurn } from './hive-group.js'
+import { registerHiveGroupRoute } from './hive-group.js'
+import { HIVE_MAX_STEPS, HIVE_MODEL, capTools, groqModel, groqSummarizer, hasGroq, hiveErrorText, rateLimitRetryAfter } from './llm.js'
+import { LIMITS, reserveAll } from '../server/limits.js'
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
 import type { Env, AppContext } from '../../worker.js'
@@ -59,9 +56,6 @@ function recordRoomStub(env: Env): DurableObjectStub {
 // Cap on user-supplied content length. Far above any realistic message;
 // blocks accidental DoS via megabyte payloads.
 const MAX_USER_CONTENT_LENGTH = 100_000
-
-/** Models allowed for owner-billed trip chats; first is the default. */
-export const HIVE_MODELS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
 
 // Derive a chat title from the first user message — first non-empty line,
 // trimmed to ~50 chars with an ellipsis.
@@ -160,7 +154,7 @@ export function registerAiChatRoutes(
     const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
     if (!jwt) return c.json({ error: 'Unauthorized' }, 401)
 
-    const { chatId, userMessageId, content, modelId, tripId } = await c.req.json<{
+    const { chatId, userMessageId, content, tripId } = await c.req.json<{
       chatId?: string
       userMessageId?: string
       content?: string
@@ -176,30 +170,15 @@ export function registerAiChatRoutes(
     if (content.length > MAX_USER_CONTENT_LENGTH) {
       return c.json({ error: `content exceeds ${MAX_USER_CONTENT_LENGTH} chars` }, 413)
     }
-    // TripHive: owner-billed trip chats run on Sonnet/Haiku only. Opus 402s on
-    // the free tier (its max-output reservation exceeds the per-request cap),
-    // and Sonnet is the better cost/latency fit for a tool-heavy planner.
-    const effectiveModelId =
-      typeof tripId === 'string' && tripId && !HIVE_MODELS.includes(String(modelId)) ? HIVE_MODELS[0] : modelId
-    const selectedModel = resolveDeepSpaceAgentModel(effectiveModelId, 'application')
-    if (!selectedModel) {
-      // Name the valid ids: the caller has no other way to learn them here.
-      const modelIds = listDeepSpaceAgentModels('application').map((model) => model.id)
-      return c.json(
-        {
-          error: `Unknown modelId: ${modelId}. Valid: ${modelIds.join(', ')}`,
-          code: 'unknown_model',
-          modelIds,
-        },
-        400,
-      )
-    }
+    // TripHive: Hive always runs on the app's Groq key (src/ai/llm.ts); the
+    // client's modelId is ignored.
+    if (!hasGroq(c.env)) return c.json({ error: 'Hive is offline: GROQ_API_KEY is not set' }, 503)
 
     // TripHive: verify membership BEFORE any model call. The tripId comes from
     // the client, so it is only trusted after requireMember passes.
     let tripTools: ReturnType<typeof buildTripTools> | null = null
+    const privileged = createActionTools(c.env, auth.userId, jwt)
     if (typeof tripId === 'string' && tripId) {
-      const privileged = createActionTools(c.env, auth.userId, jwt)
       try {
         await requireMember(privileged, tripId, auth.userId)
       } catch (err) {
@@ -207,14 +186,15 @@ export function registerAiChatRoutes(
         throw err
       }
       tripTools = buildTripTools(privileged, tripId, auth.userId, c.env.GOOGLE_MAPS_API_KEY)
-
-      // Owner-billed → reserve one turn in the server-only ai_usage counter
-      // BEFORE the model call (see reserveHiveTurn). Fails closed.
-      const reserve = await reserveHiveTurn(privileged, auth.userId)
-      if (!reserve.ok) return c.json({ error: reserve.error }, reserve.status)
     }
-    // Owner pays ONLY for verified trip chats; anything else is user-billed.
-    const billingToken = tripTools ? undefined : jwt
+    // Every chat is owner-billed on Groq → reserve a daily turn AND a burst
+    // slot in the server-only ai_usage counter BEFORE the model call. Fails
+    // closed; refunded below if Groq itself rate-limits the turn.
+    const reservation = await reserveAll(privileged, [
+      [auth.userId, LIMITS.hiveChat],
+      [auth.userId, LIMITS.burst],
+    ])
+    if (!reservation.ok) return c.json({ error: reservation.error }, reservation.status)
 
     const stub = recordRoomStub(c.env)
     const chat = await getChat(stub, chatId, auth.userId)
@@ -257,10 +237,9 @@ export function registerAiChatRoutes(
         ? { text: chat.compactedSummary, throughId: chat.compactedThroughId }
         : undefined
 
-    // TripHive: trip chats are owner-billed (travelers' fresh accounts carry no
-    // credits, so a user-billed planner would 402 for every one of them). Only
-    // verified members get here, and ai_usage caps each user per day.
-    const summarizer = makeDefaultSummarizer(c.env, billingToken ? { authToken: billingToken } : {})
+    // Compaction summaries run on Groq too (DeepSpace's default summarizer is
+    // Claude-billed and 402s without credits).
+    const summarizer = groqSummarizer(c.env)
     const { messages: prepared, newSummary } = await prepareMessagesWithCompaction(
       turns,
       DEFAULT_CONTEXT_CONFIG,
@@ -273,12 +252,7 @@ export function registerAiChatRoutes(
       })
     }
 
-    const usedModelId = selectedModel.modelId
-    const diagnosticContext = {
-      profile: 'application' as const,
-      provider: selectedModel.provider,
-      modelId: usedModelId,
-    }
+    const usedModelId = HIVE_MODEL
     const baseSystem = tripTools
       ? tripSystemPrompt(new Date().toISOString().slice(0, 10))
       : buildSystemPrompt(c.env.APP_NAME, schemas)
@@ -296,7 +270,7 @@ export function registerAiChatRoutes(
     // access grant admitted them to, and forwards the route's abort signal, so
     // a tool fetch in flight is cancelled if the client navigates away
     // mid-stream. The local assistant routes use the same executor and
-    // context, and streamDeepSpaceAgent caps each tool result for the model,
+    // context, and capTools caps each tool result for the model,
     // keeping both surfaces' tool behavior identical.
     // Trip chats get ONLY Hive's trip-scoped tools (no generic record writes).
     const tools =
@@ -392,20 +366,19 @@ export function registerAiChatRoutes(
       })
     }
 
-    const { result } = streamDeepSpaceAgent(c.env, {
-      profile: 'application',
-      modelId: usedModelId,
-      ...(billingToken ? { authToken: billingToken } : {}),
+    const result = streamText({
+      model: groqModel(c.env, usedModelId),
       instructions: systemText,
       messages,
-      tools,
+      tools: capTools(tools),
+      stopWhen: isStepCount(HIVE_MAX_STEPS),
       // Cancel provider and tool work with the request. `onAbort` then saves
       // any completed steps; a zero-step abort saves nothing.
       abortSignal: c.req.raw.signal,
       onError: ({ error }) => {
-        console.error(
-          `[ai-chat] stream error: ${deepSpaceAgentErrorSummary(error, diagnosticContext)}`,
-        )
+        console.error(`[ai-chat] stream error (${usedModelId}): ${loggableError(error)}`)
+        // Groq said slow down: the turn produced nothing, so don't charge it.
+        if (rateLimitRetryAfter(error) != null) void reservation.refund()
       },
       onEnd: ({ text, responseMessages }) => persistTurn(text, responseMessages as ModelMessage[]),
       // AI SDK skips `onEnd` on abort; keep the steps that did complete.
@@ -437,7 +410,7 @@ export function registerAiChatRoutes(
           // error. Surface the real message so RBAC denials and validation
           // failures are debuggable; log full detail server-side.
           console.error(`[ai-chat] response error: ${loggableError(error)}`)
-          return error instanceof Error ? error.message : String(error)
+          return hiveErrorText(error)
         },
       }),
     })

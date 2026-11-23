@@ -321,12 +321,12 @@ export function ChatPanel({
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               disabled={disabled}
-              placeholder={disabled ? 'Creating chat…' : 'Message the assistant…'}
+              placeholder={disabled ? 'Creating chat…' : 'Ask Hive…'}
               className="block w-full resize-none bg-transparent px-4 pt-3 pb-12 leading-[1.5] text-foreground placeholder:text-muted-foreground/60 outline-none disabled:cursor-not-allowed"
             />
 
             <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between">
-              {groupedModels.length > 0 && modelId && selectedModel ? (
+              {models.length > 1 && modelId && selectedModel ? (
                 <ModelPicker
                   grouped={groupedModels}
                   modelId={modelId}

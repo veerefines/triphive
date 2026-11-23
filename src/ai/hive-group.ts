@@ -10,13 +10,16 @@
  *    nearby food and things to do, cost, TripHive Featured perk and what
  *    other TripHivers said.
  *
- * Membership is checked before any model call, and every run reserves one
- * turn from the caller's owner-billed daily Hive budget (ai_usage).
+ * Membership is checked before any model call, and every run reserves a
+ * turn from the trip's daily group budget, the caller's daily Hive budget and
+ * the caller's burst slot (src/server/limits.ts). Runs on Groq (src/ai/llm.ts).
  */
 import type { Context, Hono } from 'hono'
-import { tool, type ToolSet } from 'ai'
+import { generateText, isStepCount, tool, type ToolSet } from 'ai'
 import { z } from 'zod/v4'
-import { streamDeepSpaceAgent, deepSpaceAgentErrorSummary, loggableError, type ActionTools } from 'deepspace/worker'
+import { loggableError, type ActionTools } from 'deepspace/worker'
+import { HIVE_FAST_MODEL, HIVE_MAX_STEPS, HIVE_MODEL, capTools, groqModel, hasGroq, rateLimitRetryAfter } from './llm.js'
+import { LIMITS, reserveAll } from '../server/limits.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, cleanStop, findPlaces, getTrip, googleGate, logActivity, requireMember, userNames, type StopData } from '../server/trips.js'
 import { featuredNear } from '../data/featured.js'
@@ -24,9 +27,6 @@ import { placeKey, summarizeReviews, type PlaceReviewData } from '../lib/reviews
 import { buildTripTools } from './trip-tools.js'
 import type { AppContext } from '../../worker.js'
 
-/** Owner-billed AI: per-user daily Hive turns, shared by the Hive panel and group chat. */
-export const HIVE_DAILY_TURNS = 40
-const GROUP_MODEL = 'claude-haiku-5-5'
 const HISTORY = 20
 const MAX_ADDS_PER_RUN = 3
 const MAX_CARDS_PER_RUN = 2
@@ -35,26 +35,6 @@ const TRIP_ID = /^[\w-]{1,80}$/
 export const HIVE_SENDER = 'hive'
 
 type RequireAccess = (c: Context<AppContext>) => Promise<{ auth: { userId: string } } | Response>
-type Reserve = { ok: true } | { ok: false; status: 429 | 503; error: string }
-
-/**
- * Reserve one Hive turn for the user today. Fails closed. Two simultaneous
- * requests can both pass the read: bounded overshoot of 1–2 turns, accepted.
- */
-export async function reserveHiveTurn(tools: ActionTools, userId: string): Promise<Reserve> {
-  const day = new Date().toISOString().slice(0, 10)
-  const usage = await tools.query<{ count: number }>('ai_usage', { where: { userId, day }, limit: 1 })
-  if (!usage.success) return { ok: false, status: 503, error: 'Usage check failed, try again' }
-  const row = usage.data.records[0]
-  const used = Number(row?.data.count ?? 0)
-  if (used >= HIVE_DAILY_TURNS) {
-    return { ok: false, status: 429, error: `Hive's daily limit (${HIVE_DAILY_TURNS} messages) is reached — try again tomorrow.` }
-  }
-  const reserved = row
-    ? await tools.update('ai_usage', row.recordId, { count: used + 1 })
-    : await tools.create('ai_usage', { userId, day, count: 1 })
-  return reserved.success ? { ok: true } : { ok: false, status: 503, error: 'Usage check failed, try again' }
-}
 
 type ChatRow = { senderId: string; text: string }
 
@@ -192,17 +172,23 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
   const names = await userNames(tools, [...new Set(rows.map((r) => r.senderId).filter((s) => s !== HIVE_SENDER))])
   const transcript = rows.map((r) => `${r.senderId === HIVE_SENDER ? 'Hive' : (names[r.senderId]?.name ?? 'Traveler')}: ${r.text}`).join('\n')
   const out = { cards: [] as PlaceCard[], added: [] as string[] }
-  const { result } = streamDeepSpaceAgent(c.env, {
-    profile: 'application',
-    modelId: GROUP_MODEL,
-    effort: 'low',
-    maxToolCalls: 8,
-    instructions: groupPrompt(new Date().toISOString().slice(0, 10)),
-    messages: [{ role: 'user', content: `Group chat so far:\n${transcript}` }],
-    tools: groupTools(tools, tripId, userId, c.env.GOOGLE_MAPS_API_KEY, out),
-    onError: ({ error }) => console.error(`[hive-group] stream error: ${deepSpaceAgentErrorSummary(error, { profile: 'application', modelId: GROUP_MODEL })}`),
-  })
-  const text = (await result.text).trim()
+  const call = (modelId: string) =>
+    generateText({
+      model: groqModel(c.env, modelId),
+      instructions: groupPrompt(new Date().toISOString().slice(0, 10)),
+      messages: [{ role: 'user', content: `Group chat so far:\n${transcript}` }],
+      tools: capTools(groupTools(tools, tripId, userId, c.env.GOOGLE_MAPS_API_KEY, out)),
+      stopWhen: isStepCount(HIVE_MAX_STEPS),
+    })
+  let result: Awaited<ReturnType<typeof call>>
+  try {
+    result = await call(HIVE_MODEL)
+  } catch (err) {
+    // Main model rate-limited before doing anything: retry once on the fast one.
+    if (rateLimitRetryAfter(err) == null || out.cards.length || out.added.length) throw err
+    result = await call(HIVE_FAST_MODEL)
+  }
+  const text = result.text.trim()
   const isQuiet = (!text || /^NOOP\.?$/i.test(text)) && out.cards.length === 0 && out.added.length === 0
   if (isQuiet) return
   const reply = text && !/^NOOP\.?$/i.test(text) ? text.slice(0, 1000) : out.added.length ? `Added ${out.added.join(', ')} to the plan.` : 'Here you go 👇'
@@ -237,11 +223,20 @@ export function registerHiveGroupRoute(app: Hono<AppContext>, requireAccess: Req
     // most one run, and Hive never answers itself.
     if (!last || last.senderId !== userId || last.text.trim().length < MIN_TEXT_LENGTH) return c.json({ skipped: true })
 
-    const reserve = await reserveHiveTurn(tools, userId)
-    if (!reserve.ok) return c.json({ error: reserve.error }, reserve.status)
+    if (!hasGroq(c.env)) return c.json({ skipped: true, reason: 'Hive is offline: GROQ_API_KEY is not set' })
+    const reservation = await reserveAll(tools, [
+      [`trip:${tripId}`, LIMITS.hiveGroup],
+      [userId, LIMITS.hiveChat],
+      [userId, LIMITS.burst],
+    ])
+    if (!reservation.ok) return c.json({ error: reservation.error }, reservation.status)
 
     // Finish even if the tab closes: the reply lands in the shared chat.
-    c.executionCtx.waitUntil(runHive(c, tools, tripId, userId, rows).catch((err) => console.error(`[hive-group] failed: ${loggableError(err)}`)))
+    const run = runHive(c, tools, tripId, userId, rows).catch(async (err) => {
+      console.error(`[hive-group] failed: ${loggableError(err)}`)
+      if (rateLimitRetryAfter(err) != null) await reservation.refund()
+    })
+    c.executionCtx.waitUntil(run)
     return c.json({ accepted: true }, 202)
   })
 }

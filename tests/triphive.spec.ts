@@ -4,7 +4,7 @@
  *   2. B (not a member) opens the trip URL and sees nothing — RBAC 'team'.
  *   3. B joins with the invite code.
  *   4. A adds a stop; it appears live for B.
- *   5. A adds an overlapping stop; Plan Doctor's issue appears for B.
+ *   5. A adds an overlapping stop; Hive's plan-check issue appears for B.
  *   6. B leaves via the trips list. 7. A deletes via the trips list.
  * Hive (LLM) is verified manually — it is non-deterministic and billed.
  */
@@ -54,7 +54,7 @@ test('two travelers plan one trip together', async ({ users }) => {
   await addStop(a.page, 'Castelo de São Jorge', '10:00', '11:30')
   await expect(b.page.getByTestId('stop-card').filter({ hasText: 'Castelo de São Jorge' })).toBeVisible({ timeout: 20_000 })
 
-  // 5. Overlap → Plan Doctor issue visible to B.
+  // 5. Overlap → Hive plan-check issue visible to B.
   await addStop(a.page, 'Time Out Market', '11:00', '12:00')
   await expect(b.page.getByTestId('stop-card').filter({ hasText: 'Time Out Market' })).toBeVisible({ timeout: 20_000 })
   await b.page.getByRole('button', { name: /^Issues/ }).click()

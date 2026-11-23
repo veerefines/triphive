@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { getUserColor, listDeepSpaceAgentModels, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
+import { getUserColor, useAuth, useMutations, usePresenceRoom, useQuery, useUsers, type RecordData } from 'deepspace'
 import { ArrowLeft, Bot, CloudSun, Copy, LogOut, Mail, MapPin, SlidersHorizontal, Trash2, UserPlus } from 'lucide-react'
 import { Button, ConfirmModal, cn, useToast } from '@/components/ui'
 import { ChatPanel } from '@/components/ChatPanel'
@@ -17,12 +17,8 @@ import { useTripMoney } from '@/components/trip/useTripMoney'
 
 type SideTab = 'hive' | 'chat' | 'proposals' | 'issues' | 'budget' | 'explore'
 
-// Mirrors HIVE_MODELS in src/ai/chat-routes.ts (the server enforces it).
-const HIVE_MODEL_IDS = ['claude-sonnet-5-5', 'claude-haiku-5-5']
-const HIVE_MODELS = listDeepSpaceAgentModels('application')
-  .filter((m) => HIVE_MODEL_IDS.includes(m.id))
-  .sort((a, b) => HIVE_MODEL_IDS.indexOf(a.id) - HIVE_MODEL_IDS.indexOf(b.id))
-  .map((m) => ({ id: m.id, label: m.label, provider: m.providerLabel }))
+// Hive always runs on Groq (src/ai/llm.ts); the server ignores modelId.
+const HIVE_MODELS = [{ id: 'groq-llama-3.3', label: 'Hive · Llama 3.3 (Groq)', provider: 'groq' }]
 
 const HIVE_PROMPTS = [
   'Plan our first day around everyone’s preferences',
@@ -87,7 +83,7 @@ export default function TripPage() {
   const onlineIds = new Set(peers.map((p) => p.userId))
   const pendingCount = proposals.filter((p) => p.data.status === 'pending').length
 
-  // Plan Doctor: re-run (server-side) shortly after THIS client changes the plan.
+  // Plan check: re-run (server-side) shortly after THIS client changes the plan.
   const recheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scheduleRecheck = useCallback(() => {
     if (recheckTimer.current) clearTimeout(recheckTimer.current)

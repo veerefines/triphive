@@ -1,5 +1,5 @@
 /**
- * Plan Doctor — deterministic itinerary checks.
+ * Hive plan check — deterministic itinerary checks.
  *
  * Pure function: same input, same issues. Runs in the worker (runPlanCheck
  * action, Hive's check_plan tool, weather cron) and is unit-tested in

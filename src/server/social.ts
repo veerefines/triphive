@@ -6,6 +6,7 @@
 import type { ActionTools } from 'deepspace/worker'
 import { cityOf, placeKey, type PlaceReviewData } from '../lib/reviews'
 import { TripError, createProposal, getTrip, listMembers, logActivity, requireMember, userNames, type StopData, type TripData } from './trips'
+import { LIMITS, reserve, type Limit } from './limits.js'
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 const today = () => new Date().toISOString().slice(0, 10)
@@ -121,14 +122,9 @@ export async function setVisibility(tools: ActionTools, userId: string, params: 
 // Join requests + request thread
 // ---------------------------------------------------------------------------
 
-async function bumpDailyCounter(tools: ActionTools, userId: string, bucket: string, cap: number) {
-  const day = `${bucket}:${today()}`
-  const r = await tools.query<{ count: number }>('ai_usage', { where: { userId, day }, limit: 1 })
-  if (!r.success) throw new TripError('Rate limit unavailable')
-  const row = r.data.records[0]
-  const used = Number(row?.data.count ?? 0)
-  if (used >= cap) throw new TripError(`Daily limit reached (${cap}). Try again tomorrow.`)
-  ok(row ? await tools.update('ai_usage', row.recordId, { count: used + 1 }) : await tools.create('ai_usage', { userId, day, count: 1 }), 'rate limit')
+async function bumpDailyCounter(tools: ActionTools, userId: string, limit: Limit) {
+  const r = await reserve(tools, userId, limit)
+  if (!r.ok) throw new TripError(r.error)
 }
 
 export async function requestToJoin(tools: ActionTools, userId: string, params: Record<string, unknown>) {
@@ -145,7 +141,7 @@ export async function requestToJoin(tools: ActionTools, userId: string, params: 
   const prior = await tools.query<JoinRequest>('join_requests', { where: { tripId, requesterId: userId }, limit: 5 })
   // One request per trip, ever: a declined request can't be re-sent to pester the host.
   if (prior.success && prior.data.records.length > 0) throw new TripError('You already asked to join this trip')
-  await bumpDailyCounter(tools, userId, 'requests', REQUESTS_PER_DAY)
+  await bumpDailyCounter(tools, userId, { ...LIMITS.requests, cap: REQUESTS_PER_DAY })
 
   const now = new Date().toISOString()
   const participants = [userId, ownerId]

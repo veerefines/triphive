@@ -34,8 +34,8 @@ export default function Landing() {
               <a href="#how" className="hidden rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
                 How it works
               </a>
-              <a href="#doctor" className="hidden rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
-                Plan Doctor
+              <a href="#hive-checks" className="hidden rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground sm:inline">
+                Hive checks
               </a>
               <Link to="/trips" className="ml-2 rounded-full bg-primary px-4 py-2 font-semibold text-primary-foreground transition hover:opacity-90">
                 Sign in
@@ -108,7 +108,7 @@ export default function Landing() {
             <Callout className="-left-2 top-[18%] sm:left-0 lg:-left-6" delay={420}>
               <span className="text-base">🩺</span>
               <span>
-                <b>Plan Doctor</b> · Castelo overlaps lunch by 30 min
+                <b>Hive</b> · Castelo overlaps lunch by 30 min
               </span>
             </Callout>
             <Callout className="-right-2 top-[46%] sm:right-0 lg:-right-6" delay={560}>
@@ -141,12 +141,12 @@ export default function Landing() {
         </section>
 
         {/* Bento */}
-        <section id="doctor" className="mx-auto max-w-6xl scroll-mt-20 px-6 pb-24">
+        <section id="hive-checks" className="mx-auto max-w-6xl scroll-mt-20 px-6 pb-24">
           <SectionHead eyebrow="Why it works" title="Humans decide. Hive does the homework." />
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-3xl border border-border bg-card p-7 lg:col-span-2">
               <p className="text-2xl">🩺</p>
-              <h3 className="font-display mt-3 text-2xl font-semibold">Plan Doctor checks every edit</h3>
+              <h3 className="font-display mt-3 text-2xl font-semibold">Hive catches clashes on every edit</h3>
               <p className="mt-2 max-w-lg text-sm text-muted-foreground">
                 Deterministic checks — not an LLM guess — run against everyone’s pace, budget, wake-up time and the
                 live forecast.

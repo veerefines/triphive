@@ -3,7 +3,7 @@
  *
  * The chat route binds these to ONE trip after verifying the caller is a
  * member, so the model can never name another trip. Hive can read anything
- * on the trip, search the web, geocode, check weather and run Plan Doctor —
+ * on the trip, search the web, geocode, check weather and run the plan check —
  * but it cannot edit the itinerary. Its only write is a *proposal* that the
  * group votes on (see voteOnProposal in src/server/trips.ts).
  */
@@ -68,7 +68,7 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
   return {
     get_trip_overview: tool({
       description:
-        'Read the whole trip: dates, destination, forecast, members with their preferences, every stop grouped by day (with ids), open Plan Doctor issues and pending proposals. Call this first.',
+        'Read the whole trip: dates, destination, forecast, members with their preferences, every stop grouped by day (with ids), open plan-check issues and pending proposals. Call this first.',
       inputSchema: z.object({}),
       execute: () =>
         guard(async () => {
@@ -190,7 +190,7 @@ export function buildTripTools(tools: ActionTools, tripId: string, userId: strin
 
     check_plan: tool({
       description:
-        'Run Plan Doctor: deterministic checks for time overlaps, impossible travel gaps, stops outside the dates, overloaded days vs pace, missing meals, outdoor stops on rainy days, budget, duplicates, early starts. Also refreshes the issues everyone sees.',
+        'Run the plan check: deterministic checks for time overlaps, impossible travel gaps, stops outside the dates, overloaded days vs pace, missing meals, outdoor stops on rainy days, budget, duplicates, early starts. Also refreshes the issues everyone sees.',
       inputSchema: z.object({}),
       execute: () => guard(async () => ({ issues: await runPlanCheck(tools, tripId) })),
     }),

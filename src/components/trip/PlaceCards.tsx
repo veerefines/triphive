@@ -80,7 +80,7 @@ function PlaceCard({ place: p, ctx }: { place: SuggestedPlace; ctx: TripChatCont
       })
       setState('added')
       toast.success(`Added to ${ctx.labelFor(date)}`, p.name)
-      // Re-run Plan Doctor for the new stop.
+      // Re-run the plan check for the new stop.
       callAction('runPlanCheck', { tripId: ctx.tripId }).catch(() => undefined)
     } catch (err) {
       setState('idle')

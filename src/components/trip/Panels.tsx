@@ -26,12 +26,12 @@ export function IssuesPanel({ issues, onAskHive }: { issues: RecordData<IssueRow
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
         <Check className="mx-auto mb-2 size-6 text-success" />
-        Plan Doctor found no conflicts.
+        Hive checked the plan: no conflicts.
       </div>
     )
   return (
     <div className="space-y-2 p-3">
-      <Button size="sm" className="w-full" onClick={() => onAskHive('Fix the open Plan Doctor issues with the smallest set of changes. Explain each proposal.')}>
+      <Button size="sm" className="w-full" onClick={() => onAskHive('Fix the open plan issues with the smallest set of changes. Explain each proposal.')}>
         <Wand2 /> Ask Hive to fix these
       </Button>
       {sorted.map((i) => (
@@ -261,7 +261,7 @@ export function PrefsModal({
       </Modal.Header>
       <form onSubmit={submit}>
         <Modal.Body className="space-y-3">
-          <p className="text-sm text-muted-foreground">Everyone on the trip sees these. Hive plans for the whole group, and Plan Doctor checks days against the strictest settings.</p>
+          <p className="text-sm text-muted-foreground">Everyone on the trip sees these. Hive plans for the whole group, and checks every day against the strictest settings.</p>
           <div className="space-y-1.5">
             <Label>Pace</Label>
             <div className="grid grid-cols-3 gap-2">

@@ -7,7 +7,7 @@
  */
 import type { ActionTools } from 'deepspace/worker'
 import { z } from 'zod'
-import { placeKey } from '../lib/reviews'
+import { cityOf, placeKey, placeName } from '../lib/reviews'
 import { LIMITS, reserve } from './limits'
 import { TripError } from './trips'
 
@@ -18,6 +18,8 @@ const MAX_REVIEWS = 5
 const MAX_REVIEW_CHARS = 600
 const MAX_HOURS_LINES = 7
 const SEARCH_RADIUS_M = 40_000
+/** Decimal places kept from lat/lng (~11 km). The rounded bias is part of the cache key. */
+const BIAS_DECIMALS = 1
 
 const FIELDS = [
   'places.displayName',
@@ -64,6 +66,26 @@ const paramsSchema = z.object({
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
 })
+
+type DetailsQuery = z.infer<typeof paramsSchema>
+
+/**
+ * Cache key covering every field sent to Google, so one caller cannot store
+ * results for another place under a key other users read.
+ */
+export function detailsKey(q: DetailsQuery): string {
+  const hasBias = q.lat != null && q.lng != null
+  const bias = hasBias ? `${q.lat!.toFixed(BIAS_DECIMALS)},${q.lng!.toFixed(BIAS_DECIMALS)}` : ''
+  return `${placeKey(q.name, q.destination)}|${bias}`
+}
+
+/** Name, city and bias reduced to exactly the key's parts, so every caller sharing a key sends the same request. */
+function canonicalQuery(q: DetailsQuery): DetailsQuery {
+  const name = placeName(q.name)
+  const destination = cityOf(q.destination) || undefined
+  if (q.lat == null || q.lng == null) return { name, destination }
+  return { name, destination, lat: Number(q.lat.toFixed(BIAS_DECIMALS)), lng: Number(q.lng.toFixed(BIAS_DECIMALS)) }
+}
 
 const text = (v: unknown, max: number): string | undefined => {
   if (typeof v !== 'string') return undefined
@@ -148,7 +170,8 @@ export function parseGooglePlace(raw: RawPlace, fallbackName: string): PlaceDeta
 
 type Query = z.infer<typeof paramsSchema>
 
-async function fetchGoogle(apiKey: string, q: Query): Promise<PlaceDetails | null> {
+/** `displayName` is only the fallback label; the request uses the canonical `q`. */
+async function fetchGoogle(apiKey: string, q: Query, displayName: string): Promise<PlaceDetails | null> {
   const body: Record<string, unknown> = { textQuery: q.destination ? `${q.name}, ${q.destination}` : q.name, maxResultCount: 1 }
   if (q.lat != null && q.lng != null) body.locationBias = { circle: { center: { latitude: q.lat, longitude: q.lng }, radius: SEARCH_RADIUS_M } }
   const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
@@ -160,7 +183,7 @@ async function fetchGoogle(apiKey: string, q: Query): Promise<PlaceDetails | nul
   if (!res.ok) throw new Error(`places details ${res.status}`)
   const data = (await res.json()) as { places?: RawPlace[] }
   const first = data.places?.[0]
-  return first ? parseGooglePlace(first, q.name) : null
+  return first ? parseGooglePlace(first, displayName) : null
 }
 
 type CacheRow = { recordId: string; details: PlaceDetails | null; fetchedAt: number }
@@ -187,8 +210,10 @@ function isFresh(row: CacheRow, now: number): boolean {
 export async function placeDetails(tools: ActionTools, userId: string, googleKey: string | undefined, params: unknown): Promise<{ details: PlaceDetails | null }> {
   const parsed = paramsSchema.safeParse(params)
   if (!parsed.success) throw new TripError('Bad place request')
-  const q = parsed.data
-  const key = placeKey(q.name, q.destination)
+  const q = canonicalQuery(parsed.data)
+  // Names with no Latin letters or digits fold to '' and would all share one key.
+  if (!q.name) return { details: null }
+  const key = detailsKey(q)
   const now = Date.now()
   const cached = await readCache(tools, key)
   if (cached && isFresh(cached, now)) return { details: cached.details }
@@ -197,7 +222,7 @@ export async function placeDetails(tools: ActionTools, userId: string, googleKey
   const budget = await reserve(tools, userId, LIMITS.places)
   if (!budget.ok) return { details: cached?.details ?? null } // stale beats nothing
   try {
-    const details = await fetchGoogle(googleKey, q)
+    const details = await fetchGoogle(googleKey, q, parsed.data.name)
     await writeCache(tools, key, cached, details, now)
     return { details }
   } catch (err) {

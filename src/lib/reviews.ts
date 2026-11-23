@@ -20,7 +20,7 @@ export interface ReviewSummary {
   avgSpentUsd: number | null
 }
 
-const fold = (s: string) =>
+export const fold = (s: string): string =>
   s
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
@@ -33,9 +33,14 @@ export function cityOf(destination: string | undefined | null): string {
   return fold(String(destination ?? '').split(',')[0] ?? '')
 }
 
+/** Folded place name exactly as it appears in placeKey. */
+export function placeName(name: string): string {
+  return fold(name).slice(0, 80)
+}
+
 /** "Time Out Market" in "Lisbon, Portugal" → "time out market|lisbon". */
 export function placeKey(name: string, destination: string | undefined | null): string {
-  return `${fold(name).slice(0, 80)}|${cityOf(destination)}`
+  return `${placeName(name)}|${cityOf(destination)}`
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10

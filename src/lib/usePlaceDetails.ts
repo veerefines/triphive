@@ -48,7 +48,6 @@ export function usePlaceDetails(query: PlaceDetailsQuery | null): DetailsState {
     return () => {
       isActive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- key captures the query
   }, [key])
 
   if (state.key !== key) return { details: null, isLoading: !!key }

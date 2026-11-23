@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ActionTools } from 'deepspace/worker'
-import { parseGooglePlace, placeDetails, safeWebUrl } from './placeDetails'
+import { detailsKey, parseGooglePlace, placeDetails, safeWebUrl } from './placeDetails'
 
 type Row = { recordId: string; data: Record<string, unknown> }
 
@@ -101,5 +101,33 @@ describe('placeDetails action', () => {
   test('rejects bad params', async () => {
     const { tools } = fakeTools()
     await expect(placeDetails(tools, 'u1', 'key', { name: '' })).rejects.toThrow('Bad place request')
+  })
+})
+
+describe('detailsKey', () => {
+  test('location bias is part of the key, rounded to ~11 km', () => {
+    const lisbon = detailsKey({ name: 'Cafe Central', destination: 'Lisbon', lat: 38.72, lng: -9.14 })
+    expect(detailsKey({ name: 'cafe central', destination: 'LISBON', lat: 38.74, lng: -9.13 })).toBe(lisbon)
+    expect(detailsKey({ name: 'Cafe Central', destination: 'Lisbon', lat: 48.21, lng: 16.37 })).not.toBe(lisbon)
+    expect(detailsKey({ name: 'Cafe Central', destination: 'Lisbon' })).not.toBe(lisbon)
+  })
+})
+
+describe('placeDetails request', () => {
+  test('sends Google only the parts that make up the cache key', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ places: [] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { tools } = fakeTools()
+    await placeDetails(tools, 'u1', 'k', { name: 'Café Central', destination: 'Lisbon, Texas', lat: 38.7234, lng: -9.1411 })
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))
+    expect(body.textQuery).toBe('cafe central, lisbon')
+    expect(body.locationBias.circle.center).toEqual({ latitude: 38.7, longitude: -9.1 })
+  })
+  test('skips names that fold to nothing instead of sharing one cache row', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const { tools } = fakeTools()
+    expect(await placeDetails(tools, 'u1', 'k', { name: '東京タワー', destination: 'Tokyo' })).toEqual({ details: null })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

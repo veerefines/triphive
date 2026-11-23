@@ -53,6 +53,22 @@ TripHive is also a place to meet travelers going the same way.
   - one active request per trip
   - message length caps
 
+## Planning together: routes, Hive in the chat, reviews, cost
+
+- **Best route between stops.** The day map draws street routes between stops (OSRM, `src/lib/routing.ts`). A strip of leg cards gives the best way to go (walk, transit or taxi), the time, the cost in the destination currency, the alternatives and a Directions link. Mode choice is in `src/lib/legs.ts`, based on distance, the group's pace and the tightest budget in the group. If OSRM is down, legs fall back to straight-line estimates marked "est.".
+- **Hive in the group chat.** After each group message, Hive reads the last 20 messages (`src/ai/hive-group.ts`, Haiku, low effort). It stays silent unless one of these happens:
+  - the group agreed on a place: Hive adds it to the plan (at most 3 per run), and the activity log says why
+  - a specific place came up: Hive posts a place card with rating, must-try dishes, food and things to do nearby, tips, a TripHive Verified perk if there is one, and TripHiver reviews
+  - someone asked for ideas: Hive posts up to 2 cards
+- **TripHiver reviews.** Members rate a place (1–5), write a line and log what they spent. Reviews are keyed by place and city, so they carry across trips. They show on Hive cards and feed the cost estimate. All writes go through a membership-checked server action.
+- **Cost tab.** Shows a per-person estimate split into getting there, stays, food, getting around (from the route legs), things to do, shopping and a buffer. Planned prices come first, then what TripHivers reported spending, then local price levels (adapted from the Wayfare formulas). Totals show in the destination currency and the viewer's home currency, using live FX from Frankfurter with offline fallback rates. The tab also suggests how much cash to carry, based on how cash-heavy the destination is.
+
+**Tradeoff: in group chat, Hive writes directly.** This departs from the proposal-only rule below. When the group has clearly agreed on a place in chat, a vote would ask them the same question twice. To limit the risk:
+- Hive can only *add* stops in chat, never edit or delete them.
+- It adds at most 3 per run.
+- Every add is tagged `source: 'ai'` and logged with the reason.
+- Group chat shares the 40-turns/day owner-billed budget with private Hive chat (`reserveHiveTurn`).
+
 ## DeepSpace primitives and integrations
 
 | Need | What I used | Why |
@@ -132,9 +148,10 @@ I directed a coding agent (Claude Code) through the whole build.
 ## Unfinished / next
 
 - Drag-to-reorder stops. Today stops are ordered by time, and Hive's `optimize_day` suggests a better order.
-- Real transit routing. Travel times today are labelled "approx" (straight line × 1.3, by mode).
+- Real transit timetables. Street routes come from OSRM. Transit and taxi times and prices are modelled, not live.
+- Hive's group-chat reply runs in the background with no streaming, so the UI shows "Hive is thinking" for up to 45 s.
 - An atomic per-user AI counter (see the known residual above).
-- Google Calendar export, per-stop comments, and a shared budget split.
+- Google Calendar export, per-stop comments, and settling up who-paid-what (the Cost tab estimates, it does not track spend).
 - Social:
   - real partner deals and an admin UI for Featured places (today it is a code-reviewed list)
   - blocking and reporting users

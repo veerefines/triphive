@@ -4,7 +4,7 @@
  * way to get there, plus a strip of legs with walk / transit / taxi options
  * priced in the destination currency (see useDayRoutes + src/lib/legs.ts).
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { RecordData } from 'deepspace'
@@ -14,6 +14,14 @@ import { CATEGORY_META, type Stop, type Trip } from './types'
 import { useDayRoutes, type DayStopPoint } from './useDayRoutes'
 import type { TripMoney } from './useTripMoney'
 import { LegsStrip, MODE_STYLE } from './LegsStrip'
+import { MapPlacePeek, type PeekStop } from './MapPlacePeek'
+import { placePeek, type PeekPlacement } from './peekPlacement'
+
+/** Hover intent before the peek opens, and grace period to move onto it. */
+const PEEK_OPEN_MS = 150
+const PEEK_CLOSE_MS = 220
+
+type PeekState = { id: string; placement: PeekPlacement }
 
 export function RouteMap({
   trip,
@@ -38,6 +46,31 @@ export function RouteMap({
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
   const bounds = useRef<L.LatLngBounds | null>(null)
+  const [peek, setPeek] = useState<PeekState | null>(null)
+  const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  const cancelClose = useCallback(() => clearTimeout(closeTimer.current), [])
+  const scheduleClose = useCallback(() => {
+    clearTimeout(openTimer.current)
+    clearTimeout(closeTimer.current)
+    closeTimer.current = setTimeout(() => setPeek(null), PEEK_CLOSE_MS)
+  }, [])
+  const scheduleOpen = useCallback((id: string, ll: L.LatLngExpression) => {
+    clearTimeout(openTimer.current)
+    clearTimeout(closeTimer.current)
+    openTimer.current = setTimeout(() => {
+      const m = map.current
+      const box = el.current
+      if (!m || !box) return
+      const pin = m.latLngToContainerPoint(ll)
+      setPeek({ id, placement: placePeek(pin, { width: box.clientWidth, height: box.clientHeight }) })
+    }, PEEK_OPEN_MS)
+  }, [])
+  useEffect(() => () => {
+    clearTimeout(openTimer.current)
+    clearTimeout(closeTimer.current)
+  }, [])
 
   const ordered = useMemo(
     () => sortDay(stops.filter((s) => s.data.date === date).map((s) => ({ ...s.data, id: s.recordId }))),
@@ -48,6 +81,7 @@ export function RouteMap({
     () => located.map((s) => ({ id: s.id, title: s.title, lat: s.lat as number, lng: s.lng as number, start: s.start })),
     [located],
   )
+  const peekStop: PeekStop | undefined = located.find((s) => s.id === peek?.id)
   const rainy = !!trip.forecast?.[date]?.rain
   const legs = useDayRoutes(points, money, rainy)
   const totals = useMemo(
@@ -65,6 +99,8 @@ export function RouteMap({
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map.current)
     layer.current = L.layerGroup().addTo(map.current)
+    // The peek is anchored to a pixel; any pan or zoom would leave it behind.
+    map.current.on('movestart zoomstart', () => setPeek(null))
     const ro = new ResizeObserver(() => {
       map.current?.invalidateSize()
       if (bounds.current) map.current?.fitBounds(bounds.current, { padding: [60, 60], maxZoom: 15 })
@@ -95,16 +131,21 @@ export function RouteMap({
       })
       const ll: L.LatLngExpression = [s.lat as number, s.lng as number]
       pts.push(ll)
-      // Leaflet renders string tooltips as HTML — pass a text node so a stop
-      // title can never inject markup into other travelers' browsers.
-      const tip = document.createElement('span')
-      tip.textContent = `${s.start ?? ''} ${s.title}`.trim()
-      const marker = L.marker(ll, { icon, zIndexOffset: isActive ? 1000 : 0 }).bindTooltip(tip, { direction: 'top', offset: [0, -14] })
-      marker.on('click', () => onPinClick?.(s.id))
-      marker.on('mouseover', () => onPinHover?.(s.id))
-      marker.on('mouseout', () => onPinHover?.(null))
+      // Details render in the React peek (text only, no HTML), not a Leaflet tooltip.
+      const marker = L.marker(ll, { icon, zIndexOffset: isActive ? 1000 : 0, title: s.title })
+      marker.on('click', () => {
+        onPinClick?.(s.id)
+        scheduleOpen(s.id, ll) // touch has no hover: a tap opens the peek
+      })
+      marker.on('mouseover', () => {
+        onPinHover?.(s.id)
+        scheduleOpen(s.id, ll)
+      })
+      marker.on('mouseout', () => {
+        onPinHover?.(null)
+        scheduleClose()
+      })
       marker.addTo(g)
-      if (isActive) marker.openTooltip()
     })
     legs.forEach((leg) => {
       const style = MODE_STYLE[leg.best.mode]
@@ -132,7 +173,7 @@ export function RouteMap({
     }
     else if (typeof trip.lat === 'number' && typeof trip.lng === 'number') m.setView([trip.lat, trip.lng], 12)
     else m.setView([20, 0], 2)
-  }, [located, ordered, legs, trip.lat, trip.lng, activeStopId, onPinClick, onPinHover])
+  }, [located, ordered, legs, trip.lat, trip.lng, activeStopId, onPinClick, onPinHover, scheduleOpen, scheduleClose])
 
   return (
     <div className="relative isolate z-0 h-full min-h-[360px] overflow-hidden rounded-3xl border border-border">
@@ -157,6 +198,9 @@ export function RouteMap({
         >
           <span className="hidden sm:inline">Open day in&nbsp;</span>Google Maps ↗
         </a>
+      )}
+      {peekStop && peek && (
+        <MapPlacePeek stop={peekStop} destination={trip.destination} money={money} placement={peek.placement} onEnter={cancelClose} onLeave={scheduleClose} />
       )}
       {legs.length > 0 && <LegsStrip legs={legs} points={points} money={money} activeStopId={activeStopId} onFocus={onPinClick} />}
       {ordered.length > located.length && (

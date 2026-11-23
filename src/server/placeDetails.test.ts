@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ActionTools } from 'deepspace/worker'
-import { detailsKey, parseGooglePlace, placeDetails, safeWebUrl } from './placeDetails'
+import { clipText, detailsKey, parseGooglePlace, placeDetails, safeWebUrl } from './placeDetails'
 
 type Row = { recordId: string; data: Record<string, unknown> }
 
@@ -42,6 +42,21 @@ const GOOGLE_PLACE = {
 }
 
 afterEach(() => vi.unstubAllGlobals())
+
+describe('clipText', () => {
+  test('keeps short text and collapses whitespace', () => {
+    expect(clipText('  a   lovely\n place ', 50)).toBe('a lovely place')
+  })
+  test('cuts long text at a word boundary and marks the cut', () => {
+    const out = clipText('We visited Elephant Falls during our Meghalaya trip and had fun', 52)
+    expect(out).toBe('We visited Elephant Falls during our Meghalaya trip…')
+    expect(out!.length).toBeLessThanOrEqual(52)
+  })
+  test('returns undefined for blank or non-string input', () => {
+    expect(clipText('   ', 10)).toBeUndefined()
+    expect(clipText(42, 10)).toBeUndefined()
+  })
+})
 
 describe('safeWebUrl', () => {
   test('keeps http(s) and drops other schemes', () => {
@@ -88,6 +103,20 @@ describe('placeDetails action', () => {
     expect(second).toEqual(first)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(tables.place_details).toHaveLength(1)
+  })
+
+  test('refetches fresh rows cached with the old mid-word review cut', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ places: [GOOGLE_PLACE] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { tools, tables } = fakeTools()
+    const params = { name: 'Time Out Market', destination: 'Lisbon, Portugal' }
+    await placeDetails(tools, 'u1', 'key', params)
+    const row = tables.place_details[0]
+    const stale = { ...(row.data.data as object), reviews: [{ author: 'A', rating: 5, text: 'x'.repeat(600), when: '' }] }
+    tables.place_details[0] = { ...row, data: { ...row.data, data: stale } }
+    const again = await placeDetails(tools, 'u1', 'key', params)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(again.details?.reviews[0].text).toBe('Great pastries')
   })
 
   test('refunds the budget when Google fails', async () => {

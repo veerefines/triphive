@@ -14,9 +14,12 @@ import { TripError } from './trips'
 
 const DETAILS_TTL_MS = 24 * 60 * 60 * 1000
 const EMPTY_TTL_MS = 6 * 60 * 60 * 1000
+/** Old rows hard-cut reviews at this length, often mid-word; refetch those. */
+const LEGACY_REVIEW_CAP = 600
+const hasLegacyCut = (d: PlaceDetails) => d.reviews.some((r) => r.text.length === LEGACY_REVIEW_CAP && !r.text.endsWith('…'))
 const FETCH_TIMEOUT_MS = 6000
 const MAX_REVIEWS = 5
-const MAX_REVIEW_CHARS = 600
+const MAX_REVIEW_CHARS = 1200
 const MAX_HOURS_LINES = 7
 const SEARCH_RADIUS_M = 40_000
 /** Decimal places kept from lat/lng (~11 km). The rounded bias is part of the cache key. */
@@ -88,11 +91,22 @@ function canonicalQuery(q: DetailsQuery): DetailsQuery {
   return { name, destination, lat: Number(q.lat.toFixed(BIAS_DECIMALS)), lng: Number(q.lng.toFixed(BIAS_DECIMALS)) }
 }
 
-const text = (v: unknown, max: number): string | undefined => {
+const ELLIPSIS = '…'
+
+/** Collapses whitespace and, when too long, cuts at the last word that fits and adds an ellipsis. */
+export function clipText(v: unknown, max: number): string | undefined {
   if (typeof v !== 'string') return undefined
   const clean = v.replace(/\s+/g, ' ').trim()
-  return clean ? clean.slice(0, max) : undefined
+  if (!clean) return undefined
+  if (clean.length <= max) return clean
+  // Look one char past the budget so a word ending exactly at the limit survives.
+  const room = max - ELLIPSIS.length
+  const lastSpace = clean.slice(0, room + 1).lastIndexOf(' ')
+  const cut = lastSpace > max / 2 ? clean.slice(0, lastSpace) : clean.slice(0, room)
+  return `${cut.replace(/[\s,.;:!?-]+$/, '')}${ELLIPSIS}`
 }
+
+const text = clipText
 
 /** Only plain https/http links leave the server (no javascript:, data:, …). */
 export function safeWebUrl(v: unknown): string | undefined {
@@ -204,6 +218,7 @@ async function writeCache(tools: ActionTools, key: string, existing: CacheRow | 
 }
 
 function isFresh(row: CacheRow, now: number): boolean {
+  if (row.details && hasLegacyCut(row.details)) return false
   return now - row.fetchedAt < (row.details ? DETAILS_TTL_MS : EMPTY_TTL_MS)
 }
 

@@ -21,6 +21,8 @@ interface ModalProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'childre
   onClose: () => void
   children: ReactNode
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  /** Hide the default corner close button when the content renders its own. */
+  hideClose?: boolean
 }
 
 // Always give a Modal an accessible name: render a <Modal.Title> (Base UI
@@ -32,6 +34,7 @@ export function Modal({
   onClose,
   children,
   size = 'md',
+  hideClose,
   className,
   ...props
 }: ModalProps): JSX.Element {
@@ -46,6 +49,7 @@ export function Modal({
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent
         aria-describedby={undefined}
+        hideClose={hideClose}
         className={cn(sizes[size], 'flex flex-col max-h-[85vh]', className)}
         {...props}
       >

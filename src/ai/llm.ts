@@ -44,12 +44,13 @@ export const HIVE_MIN_TPM = 20_000
 /**
  * History budget sized for Groq, not Claude. DeepSpace's default (240k chars,
  * 30k-char tool results) overflows Groq's free-tier 6k-30k tokens per minute.
- * ~4 chars per token: 16k chars of history + ~2.5k tokens of prompt and tools.
+ * ~4 chars per token: 10k chars of history + ~2.5k tokens of prompt and tools
+ * + the reply cap keeps one step near 6k tokens, under an 8k-TPM model.
  */
 export const HIVE_CONTEXT_CONFIG: typeof DEFAULT_CONTEXT_CONFIG = {
   ...DEFAULT_CONTEXT_CONFIG,
-  contextBudget: 16_000,
-  toolResultCap: 4_000,
+  contextBudget: 10_000,
+  toolResultCap: 3_000,
   keepRecentToolResults: 2,
   minKept: 6,
 }
@@ -160,6 +161,34 @@ export function resolveHiveModels(env: GroqEnv): Promise<HiveModels> {
   })
   return models
 }
+
+export interface ModelCooldown {
+  /** Record a 429 on `modelId`; it stays cold for `retryAfterSec`. */
+  rateLimited(modelId: string, retryAfterSec: number, now?: number): void
+  /** Main model unless it is cooling down after a 429, then the fast one. */
+  pick(models: HiveModels, now?: number): string
+}
+
+/**
+ * Per-isolate memory of which model Groq just rate-limited. Groq's free tier
+ * gives each model its own tokens-per-minute budget, so after the main model
+ * hits its limit the next turns go to the fast model instead of failing again.
+ */
+export function createModelCooldown(): ModelCooldown {
+  const coldUntil = new Map<string, number>()
+  return {
+    rateLimited(modelId, retryAfterSec, now = Date.now()) {
+      coldUntil.set(modelId, now + retryAfterSec * 1000)
+    },
+    pick(models, now = Date.now()) {
+      const until = coldUntil.get(models.main) ?? 0
+      return now < until ? models.fast : models.main
+    },
+  }
+}
+
+/** Shared cooldown for every Hive call in this isolate. */
+export const hiveCooldown = createModelCooldown()
 
 /** Drop the cached choice, e.g. after a model starts returning 404. */
 export function forgetHiveModels(): void {

@@ -18,7 +18,7 @@ import type { Context, Hono } from 'hono'
 import { generateText, isStepCount, tool, type ToolSet } from 'ai'
 import { z } from 'zod/v4'
 import { loggableError, type ActionTools } from 'deepspace/worker'
-import { HIVE_CONTEXT_CONFIG, HIVE_MAX_OUTPUT_TOKENS, HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, hasGroq, rateLimitRetryAfter } from './llm.js'
+import { HIVE_CONTEXT_CONFIG, HIVE_MAX_OUTPUT_TOKENS, HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, hasGroq, hiveCooldown, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, addStopOnce, cleanStop, findPlaces, getTrip, googleGate, logActivity, requireMember, userNames, type StopData } from '../server/trips.js'
@@ -201,12 +201,15 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
       maxOutputTokens: HIVE_MAX_OUTPUT_TOKENS,
     })
   const models = await resolveHiveModels(c.env)
+  const first = hiveCooldown.pick(models)
   let result: Awaited<ReturnType<typeof call>>
   try {
-    result = await call(models.main, 0)
+    result = await call(first, 0)
   } catch (err) {
     // Main model rate-limited before doing anything: retry once on the fast one.
-    if (rateLimitRetryAfter(err) == null || out.cards.length || out.added.length) throw err
+    const wait = rateLimitRetryAfter(err)
+    if (wait != null) hiveCooldown.rateLimited(first, wait)
+    if (wait == null || first === models.fast || out.cards.length || out.added.length) throw err
     result = await call(models.fast, 1)
   }
   const text = result.text.trim()

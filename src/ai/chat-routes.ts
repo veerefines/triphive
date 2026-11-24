@@ -34,7 +34,7 @@ import { buildTripTools, tripSystemPrompt } from './trip-tools.js'
 import { createActionTools } from '../server/action-routes.js'
 import { TripError, requireMember } from '../server/trips.js'
 import { registerHiveGroupRoute } from './hive-group.js'
-import { HIVE_CONTEXT_CONFIG, HIVE_MAX_OUTPUT_TOKENS, HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, groqSummarizer, hasGroq, hiveErrorText, rateLimitRetryAfter } from './llm.js'
+import { HIVE_CONTEXT_CONFIG, HIVE_MAX_OUTPUT_TOKENS, HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, groqSummarizer, hasGroq, hiveCooldown, hiveErrorText, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 // Type-only — TypeScript strips these at runtime, so no circular import
 // with worker.ts (which imports `registerAiChatRoutes` from this file).
@@ -254,7 +254,7 @@ export function registerAiChatRoutes(
       })
     }
 
-    const usedModelId = (await resolveHiveModels(c.env)).main
+    const usedModelId = hiveCooldown.pick(await resolveHiveModels(c.env))
     const baseSystem = tripTools
       ? tripSystemPrompt(new Date().toISOString().slice(0, 10))
       : buildSystemPrompt(c.env.APP_NAME, schemas)
@@ -380,8 +380,13 @@ export function registerAiChatRoutes(
       abortSignal: c.req.raw.signal,
       onError: ({ error }) => {
         console.error(`[ai-chat] stream error (${usedModelId}): ${loggableError(error)}`)
-        // Groq said slow down: the turn produced nothing, so don't charge it.
-        if (rateLimitRetryAfter(error) != null) void reservation.refund()
+        // Groq said slow down: the turn produced nothing, so don't charge it,
+        // and send the next turns to the fast model until this one recovers.
+        const wait = rateLimitRetryAfter(error)
+        if (wait != null) {
+          hiveCooldown.rateLimited(usedModelId, wait)
+          void reservation.refund()
+        }
       },
       onEnd: ({ text, responseMessages }) => persistTurn(text, responseMessages as ModelMessage[]),
       // AI SDK skips `onEnd` on abort; keep the steps that did complete.

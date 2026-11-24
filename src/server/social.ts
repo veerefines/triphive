@@ -7,6 +7,7 @@ import type { ActionTools } from 'deepspace/worker'
 import { cityOf, placeKey, type PlaceReviewData } from '../lib/reviews'
 import { TripError, createProposal, getTrip, listMembers, logActivity, requireMember, userNames, type StopData, type TripData } from './trips'
 import { LIMITS, reserve, type Limit } from './limits.js'
+import { connectionsOf, shareProfiles } from './profileViewers'
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 const today = () => new Date().toISOString().slice(0, 10)
@@ -53,6 +54,9 @@ export async function saveProfile(tools: ActionTools, userId: string, p: Record<
     interests,
     languages: str(p.languages, 120),
     isPublic: p.isPublic === true || p.isPublic === 1 ? 1 : 0,
+    // Recomputed on every save so a profile created after joining trips is
+    // still visible to the people the user travels with.
+    viewers: await connectionsOf(tools, userId),
   }
   const existing = await tools.query('profiles', { where: { userId }, limit: 1 })
   const row = existing.success ? existing.data.records[0] : undefined
@@ -155,6 +159,8 @@ export async function requestToJoin(tools: ActionTools, userId: string, params: 
     'create request',
   )
   await tools.create('dm_messages', { requestId: req.recordId, participants, senderId: userId, text: pitch })
+  // The host must be able to review the requester even when their profile is hidden.
+  await shareProfiles(tools, participants)
 
   // Heads-up email to the organizer (best effort).
   const names = await userNames(tools, [userId, ownerId])
@@ -199,6 +205,7 @@ export async function respondToRequest(tools: ActionTools, userId: string, param
     const lrow = listing.success ? listing.data.records[0] : undefined
     if (lrow) await tools.update('public_trips', lrow.recordId, { openSpots: Math.max(0, Number(lrow.data.openSpots ?? 1) - 1) })
     await refreshListing(tools, req.data.tripId)
+    await shareProfiles(tools, [...members.map((m) => m.data.userId), req.data.requesterId])
     const names = await userNames(tools, [req.data.requesterId])
     await logActivity(tools, req.data.tripId, req.data.requesterId, `joined from Discover (welcome, ${names[req.data.requesterId]?.name ?? 'traveler'}!)`)
   }

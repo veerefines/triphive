@@ -29,11 +29,17 @@ export const profilesSchema: CollectionSchema = {
     { name: 'languages', storage: 'text', interpretation: 'plain' },
     // 1 = listed in the People directory. Off by default: listing is opt-in.
     { name: 'isPublic', storage: 'number', interpretation: 'plain' },
+    // Connected users (trip-mates, join-request counterparts) who may read a
+    // hidden profile. Server-maintained; see src/server/profileViewers.ts.
+    { name: 'viewers', storage: 'text', interpretation: { kind: 'json' } }, // string[]
   ],
   uniqueOn: ['userId'],
   ownerField: 'userId',
+  collaboratorsField: 'viewers',
+  visibilityField: { field: 'isPublic', value: 1 },
   permissions: {
-    member: { read: true, ...SERVER_ONLY },
+    // Owner, viewers, or anyone when isPublic is 1. Never every member.
+    member: { read: 'shared', ...SERVER_ONLY },
     admin: ADMIN,
   },
 }

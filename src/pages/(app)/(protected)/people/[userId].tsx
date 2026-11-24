@@ -32,7 +32,13 @@ export default function PersonPage() {
             {p.profile?.travelStyle && <span className="flex items-center gap-1"><Globe className="size-3.5" /> {p.profile.travelStyle}</span>}
             {p.profile?.languages && <span className="flex items-center gap-1"><Languages className="size-3.5" /> {p.profile.languages}</span>}
           </p>
-          {p.profile?.bio ? <p className="mt-4 max-w-2xl text-[15px] leading-relaxed">{p.profile.bio}</p> : <p className="mt-4 text-sm text-muted-foreground">No bio yet.</p>}
+          {p.profile?.bio ? (
+            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed">{p.profile.bio}</p>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              {p.profile || uid === userId ? 'No bio yet.' : '🔒 This traveler keeps their profile private. You’ll see it once you share a trip or a join request.'}
+            </p>
+          )}
           {!!p.profile?.interests?.length && (
             <div className="mt-4 flex flex-wrap gap-2">
               {p.profile.interests.map((i) => (

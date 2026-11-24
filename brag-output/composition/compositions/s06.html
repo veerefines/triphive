@@ -1,0 +1,46 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    #s06-b, #s06-c, #s06-d { opacity: 0; }</style>
+  <div id="root" data-composition-id="s06" data-width="1920" data-height="1080">
+    <div class="win" id="s06-win" style="left:1180px;top:90px;width:538px;height:900px">
+      <div class="shot" id="s06-a"><img src="assets/ui/06-chat-typed.png" alt="" style="left:-1475.9px;top:-345.6px;width:2049.5px" /></div>
+      <div class="shot" id="s06-b"><img src="assets/ui/06-chat-thinking.png" alt="" style="left:-1475.9px;top:-345.6px;width:2049.5px" /></div>
+      <div class="shot" id="s06-c"><img src="assets/ui/06-chat-hive.png" alt="" style="left:-1475.9px;top:-345.6px;width:2049.5px" /></div>
+      <div class="shot" id="s06-d"><img src="assets/ui/06-votes-approve.png" alt="" style="left:-1475.9px;top:-345.6px;width:2049.5px" /></div>
+    </div>
+    <div id="s06-k1" class="cap" style="left:120px;top:380px;width:820px;font-size:88px"><span class="w">Ask</span><span class="w"><em>@Hive</em></span><span class="w">right</span><span class="w">in</span><span class="w">the</span><span class="w">group</span><span class="w">chat.</span></div>
+    <div id="s06-k2" class="cap" style="left:120px;top:380px;width:820px;font-size:88px"><span class="w">Nothing</span><span class="w">changes</span><span class="w">until</span><span class="w">the</span><span class="w">group</span><span class="w"><em>votes.</em></span></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    tl.fromTo('#s06-win', { x: 1000, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, ease: 'expo.out' }, 0);
+    inW('#s06-k1', 0.25);
+    fadeIn('#s06-b', 1.95, 0.25);
+    fadeIn('#s06-c', 3.3, 0.4);
+    outW('#s06-k1', 4.55);
+    fadeIn('#s06-d', 4.75, 0.4);
+    inW('#s06-k2', 4.85);
+    tl.fromTo('#s06-d img', { scale: 1 }, { scale: 1.05, duration: 2.5, ease: 'none', transformOrigin: '50% 30%' }, 4.8);
+    outW('#s06-k2', 7.4);
+    tl.fromTo('#s06-win', { filter: 'blur(0px)', opacity: 1 }, { filter: 'blur(26px)', opacity: 0, duration: 0.45, ease: 'power3.in', immediateRender: false }, 7.45);
+    window.__timelines["s06"] = tl;
+  </script>
+</template>

@@ -1,12 +1,195 @@
+<div align="center">
+
 # 🐝 TripHive
 
 **Plan the trip together. Let Hive keep it realistic.**
 
-Live: https://triphive.app.space · Built on [DeepSpace](https://docs.deep.space)
+[![Live](https://img.shields.io/badge/live-triphive.app.space-c2531f?style=flat-square)](https://triphive.app.space)
+[![Built on DeepSpace](https://img.shields.io/badge/built%20on-DeepSpace-1f1a17?style=flat-square)](https://docs.deep.space)
+![Unit tests](https://img.shields.io/badge/unit%20tests-91%20passing-2e7d32?style=flat-square)
+![Hive](https://img.shields.io/badge/Hive-Groq%20Llama%203.3-f5a524?style=flat-square)
+
+<a href="brag-output/brag.mp4"><img src="docs/readme/hero.gif" alt="TripHive demo: logo reveal, shared plan and Hive's plan check" width="800"></a>
+
+<sub>▶ <a href="brag-output/brag.mp4"><b>Watch the full 60-second demo</b></a> (with voiceover) · <a href="brag-output/brag-music-only.mp4">music-only cut</a></sub>
+
+[**Tour**](#-take-the-tour) · [**How it works**](#-how-it-works) · [**Quick start**](#-quick-start) · [**Deep dives**](#-deep-dives)
+
+</div>
+
+---
+
+> **47 messages. 3 spreadsheets. 0 plans.** Group trips die in the group chat.
+> TripHive gives the group one live itinerary, and **Hive**, the one assistant, catches what humans miss. The group votes before anything changes.
 
 TripHive lets a group of friends plan one trip together. Everyone edits the same day-by-day itinerary in real time. **Hive** is the one assistant: it checks the plan for clashes, researches real places and suggests changes, and the group votes before any change is applied.
 
-## The core flow
+## 🎬 Take the tour
+
+Click a step to expand it. Every screenshot is a real capture from production, using demo personas.
+
+<details open>
+<summary><b>1. One live plan</b>: Day-by-day stops, walk/transit legs and a route map, synced to everyone. Join with a 6-character code.</summary>
+<br>
+<img src="docs/readme/04-trip-plan.jpg" alt="One live plan" width="100%">
+</details>
+<details>
+<summary><b>2. Everyone sets their style</b>: Pace, daily budget, interests, dietary needs and wake-up time, per traveler.</summary>
+<br>
+<img src="docs/readme/04-my-style.jpg" alt="Everyone sets their style" width="100%">
+</details>
+<details>
+<summary><b>3. Hive checks the plan</b>: Deterministic checks: overlaps, tight transit, missing meals, rain, budget, early starts.</summary>
+<br>
+<img src="docs/readme/05-issues.jpg" alt="Hive checks the plan" width="100%">
+</details>
+<details>
+<summary><b>4. @Hive in the group chat</b>: Ask for ideas; Hive posts real place cards you can add or put to a vote.</summary>
+<br>
+<img src="docs/readme/06-chat-hive.jpg" alt="@Hive in the group chat" width="100%">
+</details>
+<details>
+<summary><b>5. The group votes</b>: Nothing changes until the majority agrees (or the organizer approves).</summary>
+<br>
+<img src="docs/readme/06-votes-approve.jpg" alt="The group votes" width="100%">
+</details>
+<details>
+<summary><b>6. Cost, weather, PDF, email</b>: Per-person estimate in local and home currency, plus cash-to-carry advice.</summary>
+<br>
+<img src="docs/readme/07-cost.jpg" alt="Cost, weather, PDF, email" width="100%">
+</details>
+<details>
+<summary><b>7. Find your people</b>: Public trips within ±5 days and 60 km of yours. Pitch to join.</summary>
+<br>
+<img src="docs/readme/08-discover.jpg" alt="Find your people" width="100%">
+</details>
+<details>
+<summary><b>8. Accept and they are in</b>: Requests land in the Inbox with the traveler's profile. Accept unlocks chat and the plan.</summary>
+<br>
+<img src="docs/readme/08-inbox-accepted.jpg" alt="Accept and they are in" width="100%">
+</details>
+<details>
+<summary><b>9. People directory</b>: Opt-in profiles, enforced on the server.</summary>
+<br>
+<img src="docs/readme/08-people.jpg" alt="People directory" width="100%">
+</details>
+
+## 🧠 How it works
+
+<details open>
+<summary><b>The core loop</b></summary>
+
+```mermaid
+flowchart LR
+  A["Create trip"] --> B["Share 6-char code"]
+  B --> C["Friends join<br/>live avatars"]
+  C --> D["Each sets pace,<br/>budget, wake-up"]
+  D --> E["Add stops<br/>realtime sync"]
+  E --> F{"Hive plan check"}
+  F -- "issues" --> G["Ask Hive to fix"]
+  G --> H["Proposal"]
+  H --> I{"Group vote"}
+  I -- "majority yes" --> E
+  I -- "no" --> J["Discarded"]
+  F -- "all clear" --> K["PDF / Email plan"]
+```
+</details>
+
+<details>
+<summary><b>Hive proposes, humans decide</b> (sequence)</summary>
+
+```mermaid
+sequenceDiagram
+  actor Ana
+  participant Hive
+  participant Tools as Exa · OSM · Weather
+  participant Server as Server actions
+  actor Group
+  Ana->>Hive: "fix the conflicts on day 2"
+  Hive->>Server: membership check + rate-limit reserve()
+  Hive->>Tools: search, geocode, forecast, routes
+  Tools-->>Hive: real places + sources
+  Hive->>Server: write proposal (only write Hive can make)
+  Server-->>Group: proposal appears live in Votes
+  Group->>Server: 👍 / 👎
+  Server->>Server: majority? re-check target, apply or mark stale
+  Server-->>Ana: plan updates for everyone
+```
+</details>
+
+<details>
+<summary><b>Architecture</b></summary>
+
+```mermaid
+flowchart TB
+  subgraph Client["React client"]
+    UI["Trip · Discover · Inbox · People"]
+    RT["useQuery / useMutations<br/>presence rooms"]
+  end
+  subgraph DS["DeepSpace (Cloudflare Workers)"]
+    RR["RecordRoom collections<br/>team / collaborators RBAC"]
+    ACT["Server actions<br/>membership-checked writes"]
+    AI["Hive agent<br/>trip-scoped tools"]
+    CRON["CronRoom<br/>daily weather watch"]
+  end
+  subgraph EXT["External"]
+    GROQ["Groq Llama 3.3"]
+    EXA["Exa search"]
+    OWM["OpenWeatherMap"]
+    OSM["OSM / OSRM"]
+    GP["Google Places"]
+    MAIL["email/send"]
+  end
+  UI --> RT --> RR
+  UI --> ACT --> RR
+  UI --> AI
+  AI --> GROQ & EXA & OWM & OSM & GP
+  AI --> ACT
+  CRON --> OWM
+  CRON --> MAIL
+  ACT --> MAIL
+```
+</details>
+
+## ⚡ Quick start
+
+```sh
+npm install
+npx deepspace auth login
+npx deepspace dev start          # http://localhost:5173
+npx vitest run                   # unit tests
+npx deepspace test run tests/triphive.spec.ts   # needs 2 test accounts
+npx deepspace deploy
+```
+
+Secrets (set them yourself; they are never committed):
+
+```sh
+npx deepspace secrets set GROQ_API_KEY          # Hive
+npx deepspace secrets set GOOGLE_MAPS_API_KEY   # optional: ratings and photos
+```
+
+**Demo world.** On `/settings` the app owner sees a **Demo data** card. Typing `WIPE` and pressing **Reset demo** deletes *every* trip, chat, request and review, then seeds four trips (Lisbon, Meghalaya, Tokyo, Barcelona) with three demo travelers, reviews, DMs and pending join requests (`src/data/demo.ts`, `src/server/demo.ts`). It cannot be undone. The server re-checks that the caller is the owner, and wipes in batches to stay under the Workers subrequest cap.
+
+Key files:
+- `src/schemas/trip-schemas.ts`: data and access model
+- `src/lib/planCheck.ts`: plan checks
+- `src/ai/llm.ts`, `src/server/limits.ts`: Groq and rate limits
+- `src/lib/planPdf.ts`: PDF itinerary
+- `src/server/trips.ts`: trip service
+- `src/ai/trip-tools.ts`: Hive's tools and prompt
+- `src/actions/index.ts`: server actions
+- `src/cron.ts`: weather watch
+- `src/pages/(app)/(protected)/trips/`: UI
+- `src/schemas/social-schemas.ts`, `src/server/social.ts`: the social layer
+- `src/pages/(app)/(protected)/{discover,inbox,profile,people}`: Discover, Inbox and profiles
+
+## 📚 Deep dives
+
+Click a section to expand it.
+
+<details>
+<summary><h3>🧭 The core flow</h3></summary>
 
 1. Create a trip. TripHive geocodes the city and pulls a 5-day forecast.
 2. Share the 6-character invite code. Friends join and appear as live avatars, with an "Ana is editing…" badge on the stop they have open.
@@ -27,7 +210,10 @@ TripHive lets a group of friends plan one trip together. Everyone edits the same
 8. **Download PDF** or **Email plan**. The PDF (`src/lib/planPdf.ts`, pdf-lib) has a cover with travelers and planned spend, then one section per day with the forecast and a time / place / cost table. The email goes to each member separately, at most 3 sends per trip per hour. Each morning a cron job refreshes the forecast and emails the group if a new rain conflict appears.
 9. **Ask Hive from anywhere.** A floating button on Discover, Trips, Inbox and Profile asks which trip, then opens it with Hive focused and the question queued. Hive always runs inside one trip, so it has the dates, group and budget.
 
-## Social layer: find your people
+</details>
+
+<details>
+<summary><h3>🤝 Social layer: find your people</h3></summary>
 
 TripHive is also a place to meet travelers going the same way.
 
@@ -55,7 +241,10 @@ TripHive is also a place to meet travelers going the same way.
   - one active request per trip
   - message length caps
 
-## Planning together: routes, Hive in the chat, reviews, cost
+</details>
+
+<details>
+<summary><h3>🗺️ Planning together: routes, Hive in the chat, reviews, cost</h3></summary>
 
 - **Best route between stops.** The day map draws street routes between stops (OSRM, `src/lib/routing.ts`). A strip of leg cards gives the best way to go (walk, transit or taxi), the time, the cost in the destination currency, the alternatives and a Directions link. Mode choice is in `src/lib/legs.ts`, based on distance, the group's pace and the tightest budget in the group. If OSRM is down, legs fall back to straight-line estimates marked "est.".
 - **Hive in the group chat.** After each group message, Hive reads the last 20 messages (`src/ai/hive-group.ts`, Groq Llama 3.3, retrying once on Llama 3.1 8B when rate-limited). It stays silent unless one of these happens:
@@ -71,7 +260,10 @@ TripHive is also a place to meet travelers going the same way.
 - Every add is tagged `source: 'ai'` and logged with the reason.
 - Group-chat Hive has its own budget of 40 runs per trip per day (`LIMITS.hiveGroup`).
 
-## DeepSpace primitives and integrations
+</details>
+
+<details>
+<summary><h3>🧱 DeepSpace primitives and integrations</h3></summary>
 
 | Need | What I used | Why |
 |---|---|---|
@@ -96,7 +288,10 @@ Not from DeepSpace: **OpenStreetMap** (Nominatim for place geocoding, map tiles 
 - **LiveKit:** text collaboration is enough here.
 - **Google Calendar export:** a natural next step, but it needs per-user OAuth.
 
-## The main tradeoff: Hive proposes, humans decide
+</details>
+
+<details>
+<summary><h3>⚖️ The main tradeoff: Hive proposes, humans decide</h3></summary>
 
 The scaffold's agent can write records directly as the user. I removed that. In TripHive, Hive's only write is a **proposal** row. Proposals are `create: false` for clients, written server-side, and applied only by the vote action.
 
@@ -115,7 +310,10 @@ Related decisions:
   - Plan email: 3 per trip per hour; join requests: 20 per user per day
 - **RBAC `create` is a boolean in DeepSpace**, so it can't be scoped to a row. Every trip collection is therefore `create: false`, and creation goes through membership-checked actions (`addStop`, `savePrefs`). Edits stay as direct realtime writes, because `update`/`delete` *are* row-scoped (`'team'`/`'own'`).
 
-## How it was built: what the agent did vs. what I verified
+</details>
+
+<details>
+<summary><h3>🔍 How it was built: what the agent did vs. what I verified</h3></summary>
 
 I directed a coding agent (Claude Code) through the whole build.
 
@@ -152,7 +350,10 @@ I directed a coding agent (Claude Code) through the whole build.
 
 **What I verified myself:** _<!-- TODO(applicant): fill in what you personally clicked through and checked, e.g. two browsers on the live URL, invite flow, Hive proposals + voting, email received -->_
 
-## Unfinished / next
+</details>
+
+<details>
+<summary><h3>🚧 Unfinished / next</h3></summary>
 
 - Drag-to-reorder stops. Today stops are ordered by time, and Hive's `optimize_day` suggests a better order.
 - Real transit timetables. Street routes come from OSRM. Transit and taxi times and prices are modelled, not live.
@@ -165,35 +366,4 @@ I directed a coding agent (Claude Code) through the whole build.
   - read receipts and unread counts per thread
   - map-based search on Discover
 
-## Run it
-
-```sh
-npm install
-npx deepspace auth login
-npx deepspace dev start          # http://localhost:5173
-npx vitest run                   # unit tests
-npx deepspace test run tests/triphive.spec.ts   # needs 2 test accounts
-npx deepspace deploy
-```
-
-Secrets (set them yourself; they are never committed):
-
-```sh
-npx deepspace secrets set GROQ_API_KEY          # Hive
-npx deepspace secrets set GOOGLE_MAPS_API_KEY   # optional: ratings and photos
-```
-
-**Demo world.** On `/settings` the app owner sees a **Demo data** card. Typing `WIPE` and pressing **Reset demo** deletes *every* trip, chat, request and review, then seeds four trips (Lisbon, Meghalaya, Tokyo, Barcelona) with three demo travelers, reviews, DMs and pending join requests (`src/data/demo.ts`, `src/server/demo.ts`). It cannot be undone. The server re-checks that the caller is the owner, and wipes in batches to stay under the Workers subrequest cap.
-
-Key files:
-- `src/schemas/trip-schemas.ts`: data and access model
-- `src/lib/planCheck.ts`: plan checks
-- `src/ai/llm.ts`, `src/server/limits.ts`: Groq and rate limits
-- `src/lib/planPdf.ts`: PDF itinerary
-- `src/server/trips.ts`: trip service
-- `src/ai/trip-tools.ts`: Hive's tools and prompt
-- `src/actions/index.ts`: server actions
-- `src/cron.ts`: weather watch
-- `src/pages/(app)/(protected)/trips/`: UI
-- `src/schemas/social-schemas.ts`, `src/server/social.ts`: the social layer
-- `src/pages/(app)/(protected)/{discover,inbox,profile,people}`: Discover, Inbox and profiles
+</details>

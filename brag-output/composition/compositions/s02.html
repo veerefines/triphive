@@ -1,0 +1,44 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    #s02-flood { position: absolute; left: 930px; top: 510px; width: 60px; height: 60px; border-radius: 50%; background: #d4622a; }
+    .s02-q { position: absolute; padding: 26px 38px; background: #fbf8f2; border-radius: 28px; font-family: 'Fraunces', serif; font-weight: 700;
+      font-size: 64px; color: #1c1814; white-space: nowrap; box-shadow: 0 30px 60px -24px rgba(28,24,20,0.45); }
+    #s02-paper { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: #ebe8e1; }</style>
+  <div id="root" data-composition-id="s02" data-width="1920" data-height="1080">
+    <div id="s02-flood"></div>
+    <div class="s02-q" id="s02-q0" style="left:230px;top:250px">Who is booking?</div>
+    <div class="s02-q" id="s02-q1" style="left:760px;top:470px">Does it rain?</div>
+    <div class="s02-q" id="s02-q2" style="left:1120px;top:210px">Anyone up at 7?</div>
+    <div id="s02-line" class="cap" style="left:0;top:420px;width:1920px;text-align:center;font-size:118px"><span class="w">Group</span><span class="w">trips</span><span class="w">die</span><br/><span class="w">in</span><span class="w">the</span><span class="w">group</span><span class="w">chat.</span></div>
+    <div id="s02-paper"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    tl.fromTo('#s02-flood', { scale: 1 }, { scale: 72, duration: 0.5, ease: 'expo.in' }, 0);
+    const QT = [0.05, 0.25, 0.45]; const QR = [-5,3,-2];
+    QT.forEach((t, i) => tl.fromTo('#s02-q' + i, { opacity: 0, y: 60, rotation: 0 }, { opacity: 1, y: 0, rotation: QR[i], duration: 0.45, ease: 'expo.out' }, t));
+    tl.fromTo('.s02-q', { opacity: 1, scale: 1 }, { opacity: 0, scale: 0.9, duration: 0.22, ease: 'power3.in', stagger: 0.04, immediateRender: false }, 1.48);
+    // beat-locked: 5.74s
+    inW('#s02-line', 1.64);
+    tl.fromTo('#s02-paper', { y: 1100 }, { y: 0, duration: 0.45, ease: 'power3.in' }, 3.62);
+    window.__timelines["s02"] = tl;
+  </script>
+</template>

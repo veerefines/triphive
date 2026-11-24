@@ -1,0 +1,63 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    .s01-b { position: absolute; padding: 18px 28px; border-radius: 26px 26px 26px 8px; background: #f8f7f3; border: 1px solid #d9d4c9;
+      font-size: 32px; color: #1c1814; white-space: nowrap; box-shadow: 0 14px 30px -14px rgba(28,24,20,0.3); }
+    .s01-b.hot { background: #f3ddd0; border-color: #e7c2ab; }
+    #s01-l3 em { background: #f3ddd0; color: #1c1814; padding: 0 0.12em; border-radius: 12px; }
+    #s01-dot { position: absolute; left: 930px; top: 510px; width: 60px; height: 60px; border-radius: 50%; background: #d4622a; }</style>
+  <div id="root" data-composition-id="s01" data-width="1920" data-height="1080">
+    <div class="s01-b" id="s01-b0" style="left:120px;top:110px">booking anything yet??</div>
+    <div class="s01-b hot" id="s01-b1" style="left:1340px;top:140px">wait which dates</div>
+    <div class="s01-b" id="s01-b2" style="left:260px;top:330px">I made a sheet</div>
+    <div class="s01-b hot" id="s01-b3" style="left:1250px;top:360px">no use MY sheet</div>
+    <div class="s01-b" id="s01-b4" style="left:140px;top:560px">is it monsoon there</div>
+    <div class="s01-b" id="s01-b5" style="left:1420px;top:600px">who is driving</div>
+    <div class="s01-b hot" id="s01-b6" style="left:380px;top:800px">can we vote</div>
+    <div class="s01-b" id="s01-b7" style="left:1180px;top:830px">lunch??</div>
+    <div class="s01-b" id="s01-b8" style="left:760px;top:70px">not waking at 5am</div>
+    <div class="s01-b hot" id="s01-b9" style="left:700px;top:920px">budget per person?</div>
+    <div class="s01-b" id="s01-b10" style="left:1500px;top:940px">new sheet v3</div>
+    <div class="s01-b" id="s01-b11" style="left:60px;top:960px">ok but where</div>
+    <div id="s01-hook" class="cap" style="left:0;top:330px;width:1920px;text-align:center;font-size:124px">
+      <div id="s01-l1"><span class="w">47</span><span class="w">messages.</span></div>
+      <div id="s01-l2"><span class="w">3</span><span class="w">spreadsheets.</span></div>
+      <div id="s01-l3"><span class="w">0</span><span class="w"><em>plans.</em></span></div>
+    </div>
+    <div id="s01-dot"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    const T = [0.05,0.27,0.42,0.55,0.68,0.82,0.93,1.02,1.1,1.18,1.24,1.3];
+    const R = [-4,3,2,-3,-2,4,3,-5,2,-2,3,4];
+    T.forEach((t, i) => tl.fromTo('#s01-b' + i, { opacity: 0, scale: 0.6, rotation: 0 }, { opacity: 1, scale: 1, rotation: R[i], duration: 0.35, ease: 'back.out(2)' }, t));
+    tl.fromTo('.s01-b', { opacity: 1 }, { opacity: 0.16, duration: 0.4, ease: 'power2.out', immediateRender: false }, 1.3);
+    // beat-locked: 1.37s
+    inW('#s01-l1', 1.37);
+    // beat-grid
+    inW('#s01-l2', 1.90);
+    // beat-grid
+    inW('#s01-l3', 2.46);
+    outW('#s01-hook', 3.45);
+    tl.fromTo('.s01-b', { x: 0, y: 0, scale: 1 }, { x: (i) => 960 - [270,1490,410,1400,290,1570,530,1330,910,850,1650,210][i], y: (i) => 540 - [140,170,360,390,590,630,830,860,100,950,970,990][i], scale: 0.05, opacity: 0, duration: 0.42, ease: 'power3.in', immediateRender: false }, 3.4);
+    tl.fromTo('#s01-dot', { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.25, ease: 'expo.out' }, 3.78);
+    window.__timelines["s01"] = tl;
+  </script>
+</template>

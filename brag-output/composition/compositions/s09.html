@@ -1,0 +1,52 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    #s09-flood { position: absolute; left: 930px; top: 510px; width: 60px; height: 60px; border-radius: 50%; background: #d4622a; }</style>
+  <div id="root" data-composition-id="s09" data-width="1920" data-height="1080">
+    <div id="s09-r1" style="position:absolute;left:0;top:70px;width:1920px;height:467px">
+      <div class="win s09-c" id="s09-t0" style="left:148px;top:0;width:515px;height:467px;border-radius:24px">
+        <img src="assets/ui/09-trip-2.png" alt="" style="position:absolute;left:0;top:0;width:515px;height:467px" /></div>
+      <div class="win s09-c" id="s09-t1" style="left:703px;top:0;width:515px;height:467px;border-radius:24px">
+        <img src="assets/ui/09-trip-3.png" alt="" style="position:absolute;left:0;top:0;width:515px;height:467px" /></div>
+      <div class="win s09-c" id="s09-t2" style="left:1258px;top:0;width:515px;height:467px;border-radius:24px">
+        <img src="assets/ui/09-trip-4.png" alt="" style="position:absolute;left:0;top:0;width:515px;height:467px" /></div>
+    </div>
+    <div id="s09-r2" style="position:absolute;left:0;top:577px;width:1920px;height:370px">
+      <div class="win s09-c" id="s09-p0" style="left:148px;top:0;width:513px;height:370px;border-radius:24px">
+        <div class="shot" id="s09-ps0"><img src="assets/ui/08-people.png" alt="" style="left:-243.5px;top:-934.2px;width:2086.8px" /></div></div>
+      <div class="win s09-c" id="s09-p1" style="left:703px;top:0;width:513px;height:370px;border-radius:24px">
+        <div class="shot" id="s09-ps1"><img src="assets/ui/08-people.png" alt="" style="left:-787.5px;top:-935.9px;width:2089.4px" /></div></div>
+      <div class="win s09-c" id="s09-p2" style="left:1258px;top:0;width:513px;height:370px;border-radius:24px">
+        <div class="shot" id="s09-ps2"><img src="assets/ui/08-people.png" alt="" style="left:-1331.6px;top:-935.9px;width:2089.4px" /></div></div>
+    </div>
+    <div id="s09-flood"></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    const ORDER = ['#s09-t0', '#s09-p1', '#s09-t1', '#s09-p0', '#s09-t2', '#s09-p2'];
+    const BEATS = [0.46, 1.0, 1.55, 2.1, 2.64, 3.19];
+    // beat-grid
+    ORDER.forEach((sel, i) => tl.fromTo(sel, { opacity: 0, y: 90, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'expo.out' }, BEATS[i]));
+    tl.fromTo('#s09-r1', { x: 80 }, { x: -80, duration: 6, ease: 'none' }, 0);
+    tl.fromTo('#s09-r2', { x: -80 }, { x: 80, duration: 6, ease: 'none' }, 0);
+    tl.fromTo('#s09-flood', { scale: 0 }, { scale: 70, duration: 0.6, ease: 'expo.in' }, 5.3);
+    window.__timelines["s09"] = tl;
+  </script>
+</template>

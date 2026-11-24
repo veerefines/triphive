@@ -1,0 +1,38 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+</style>
+  <div id="root" data-composition-id="s07" data-width="1920" data-height="1080">
+    <div id="s07-k" class="cap" style="left:0;top:64px;width:1920px;text-align:center;font-size:76px"><span class="w">Split</span><span class="w">the</span><span class="w">cost.</span><span class="w">Check</span><span class="w">the</span><span class="w"><em>weather.</em></span><span class="w">Send</span><span class="w">the</span><span class="w">PDF.</span></div>
+    <div class="win s07-card" id="s07-strip" style="left:472px;top:200px;width:976px;height:82px;border-radius:20px"><div class="shot" id="s07-s"><img src="assets/ui/07-cost.png" alt="" style="left:-1296.0px;top:-111.0px;width:2304.0px" /></div></div>
+    <div class="win s07-card" id="s07-stops" style="left:300px;top:320px;width:640px;height:680px"><div class="shot" id="s07-p"><img src="assets/ui/07-cost.png" alt="" style="left:-29.8px;top:-352.1px;width:2143.3px" /></div></div>
+    <div class="win s07-card" id="s07-cost" style="left:1000px;top:320px;width:470px;height:700px"><div class="shot" id="s07-c"><img src="assets/ui/07-cost-card.png" alt="" style="left:-0.0px;top:0.0px;width:470.0px" /></div></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    inW('#s07-k', 0.1);
+    tl.fromTo('#s07-strip', { opacity: 0, y: -60 }, { opacity: 1, y: 0, duration: 0.55, ease: 'expo.out' }, 0.3);
+    tl.fromTo('#s07-stops', { opacity: 0, x: -140, rotation: -4 }, { opacity: 1, x: 0, rotation: -1.5, duration: 0.65, ease: 'expo.out' }, 0.9);
+    tl.fromTo('#s07-cost', { opacity: 0, x: 140, rotation: 4 }, { opacity: 1, x: 0, rotation: 1.5, duration: 0.65, ease: 'expo.out' }, 1.5);
+    tl.fromTo('#s07-c img', { y: 0 }, { y: -130, duration: 2.4, ease: 'power1.inOut' }, 2.6);
+    outW('#s07-k', 5.3);
+    tl.fromTo('.s07-card', { x: 0 }, { x: -2400, duration: 0.42, ease: 'power3.in', stagger: 0.06, immediateRender: false }, 5.4);
+    window.__timelines["s07"] = tl;
+  </script>
+</template>

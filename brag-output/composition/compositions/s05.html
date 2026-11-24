@@ -1,0 +1,52 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    .s05-i { position: absolute; left: 900px; width: 900px; padding: 30px 38px; background: #f8f7f3; border: 1px solid #d9d4c9;
+      border-left: 10px solid #d4622a; border-radius: 24px; box-shadow: 0 30px 60px -30px rgba(28,24,20,0.35); }
+    .s05-t { margin-top: 10px; font-size: 40px; line-height: 1.22; color: #1c1814; font-weight: 600; }</style>
+  <div id="root" data-composition-id="s05" data-width="1920" data-height="1080">
+    <div id="s05-head" class="cap" style="left:0;top:70px;width:1920px;text-align:center;font-size:110px"><span class="w">Let</span><span class="w">Hive</span><span class="w">keep</span><span class="w">it</span><span class="w"><em>realistic.</em></span></div>
+    <div class="win" id="s05-win" style="left:120px;top:270px;width:700px;height:740px"><div class="shot" id="s05-a"><img src="assets/ui/05-issues.png" alt="" style="left:-986.1px;top:-284.5px;width:1686.1px" /></div></div>
+    <div class="s05-i" id="s05-i0" style="top:300px">
+      <div class="label">Travel time</div><div class="s05-t">Needs ~116 min by transit, but only 30 min is free.</div>
+    </div>
+    <div class="s05-i" id="s05-i1" style="top:536px">
+      <div class="label">Meal gap</div><div class="s05-t">No lunch stop between 11:30 and 14:30.</div>
+    </div>
+    <div class="s05-i" id="s05-i2" style="top:772px">
+      <div class="label">Early start</div><div class="s05-t">Root bridge trek starts 07:00, before Sam is usually up (08:00).</div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    // beat-locked: 20.19s
+    inW('#s05-head', 0);
+    tl.fromTo('#s05-win', { opacity: 0, y: 100 }, { opacity: 1, y: 0, duration: 0.7, ease: 'expo.out' }, 0.25);
+    // beat-grid
+    tl.fromTo('#s05-i0', { opacity: 0, x: 120 }, { opacity: 1, x: 0, duration: 0.55, ease: 'expo.out' }, 0.55);
+    // beat-grid
+    tl.fromTo('#s05-i1', { opacity: 0, x: 120 }, { opacity: 1, x: 0, duration: 0.55, ease: 'expo.out' }, 1.64);
+    // beat-grid
+    tl.fromTo('#s05-i2', { opacity: 0, x: 120 }, { opacity: 1, x: 0, duration: 0.55, ease: 'expo.out' }, 2.73);
+    tl.fromTo('#s05-a img', { y: 0 }, { y: -40, duration: 6, ease: 'none' }, 0.5);
+    tl.fromTo(['#s05-head', '#s05-win', '.s05-i'], { x: 0, filter: 'blur(0px)' }, { x: -2300, filter: 'blur(18px)', duration: 0.38, ease: 'power3.in', stagger: 0.03, immediateRender: false }, 7.3);
+    window.__timelines["s05"] = tl;
+  </script>
+</template>

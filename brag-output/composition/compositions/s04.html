@@ -1,0 +1,56 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    #s04-a, #s04-b, #s04-c { opacity: 1; }
+    #s04-b, #s04-c { opacity: 0; }
+    #s04-code { opacity: 0; }</style>
+  <div id="root" data-composition-id="s04" data-width="1920" data-height="1080">
+    <div class="win" id="s04-win" style="left:680px;top:178px;width:1140px;height:712px">
+      <div class="shot" id="s04-a"><img src="assets/ui/04-trip-plan.png" alt="" style="left:0.0px;top:0.0px;width:1139.2px" /></div>
+      <div class="shot" id="s04-b"><img src="assets/ui/04-trip-plan.png" alt="" style="left:-1064.0px;top:0.0px;width:2736.0px" /></div>
+      <div class="shot" id="s04-c"><img src="assets/ui/04-my-style.png" alt="" style="left:-415.8px;top:-260.2px;width:1971.7px" /></div>
+    </div>
+    <div id="s04-code" class="win" style="left:1040px;top:800px;width:398px;height:128px;border-radius:24px">
+      <img src="assets/ui/04-invite-code.png" alt="" style="position:absolute;left:13px;top:10px;width:372px;height:108px" />
+    </div>
+    <div id="s04-k1" class="cap" style="left:110px;top:400px;width:520px;font-size:80px"><span class="w">One</span><span class="w">plan.</span><span class="w">Live</span><span class="w">for</span><span class="w"><em>everyone.</em></span></div>
+    <div id="s04-k2" class="cap" style="left:110px;top:400px;width:520px;font-size:80px"><span class="w">Share</span><span class="w">a</span><span class="w"><em>6-character</em></span><span class="w">code.</span></div>
+    <div id="s04-k3" class="cap" style="left:110px;top:340px;width:540px;font-size:76px"><span class="w">Everyone</span><span class="w">sets</span><span class="w">their</span><span class="w">own</span><span class="w"><em>pace</em></span><span class="w">and</span><span class="w"><em>budget.</em></span></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    tl.fromTo('#s04-win', { opacity: 0, y: 120 }, { opacity: 1, y: 0, duration: 0.7, ease: 'expo.out' }, 0);
+    tl.fromTo('#s04-a img', { scale: 1 }, { scale: 1.05, duration: 2.6, ease: 'none', transformOrigin: '50% 30%' }, 0.1);
+    inW('#s04-k1', 0.3);
+    outW('#s04-k1', 2.55);
+    fadeIn('#s04-b', 2.75);
+    inW('#s04-k2', 2.85);
+    tl.fromTo('#s04-code', { opacity: 0, y: 60, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.55, ease: 'back.out(1.8)' }, 3.2);
+    outW('#s04-k2', 5.0);
+    fadeOut('#s04-code', 5.0);
+    fadeIn('#s04-c', 5.2);
+    inW('#s04-k3', 5.3);
+    // beat-locked: 18.55s
+    tl.fromTo('#s04-c img', { scale: 1 }, { scale: 1.06, duration: 2.3, ease: 'none', transformOrigin: '50% 50%' }, 5.3);
+    outW('#s04-k3', 7.55);
+    tl.fromTo('#s04-win', { clipPath: 'circle(120% at 50% 50%)' }, { clipPath: 'circle(0% at 50% 50%)', duration: 0.5, ease: 'power3.in', immediateRender: false }, 7.62);
+    window.__timelines["s04"] = tl;
+  </script>
+</template>

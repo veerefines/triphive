@@ -1,0 +1,53 @@
+<template>
+  <style>
+@font-face { font-family: 'Fraunces'; src: url('assets/fonts/fraunces-latin.woff2') format('woff2'); font-weight: 400 900; font-display: block; }
+#root { position: absolute; inset: 0; font-family: Inter, sans-serif; color: #1c1814; overflow: hidden; }
+.cap { position: absolute; font-family: 'Fraunces', serif; font-weight: 700; color: #1c1814; letter-spacing: -0.02em; line-height: 1.04; }
+.cap .w { display: inline-block; margin-right: 0.22em; }
+.cap em { font-style: normal; color: #b4501f; }
+.label { font-family: 'IBM Plex Mono', monospace; font-size: 28px; letter-spacing: 0.14em; text-transform: uppercase; color: #6f685d; }
+.win { position: absolute; overflow: hidden; border-radius: 28px; background: #f8f7f3; border: 1px solid #d9d4c9;
+  box-shadow: 0 50px 100px -30px rgba(28,24,20,0.35), 0 18px 36px -18px rgba(28,24,20,0.25); }
+.shot { position: absolute; inset: 0; }
+.shot img { position: absolute; max-width: none; display: block; }
+
+    #s08-b, #s08-c, #s08-d, #s08-pw { opacity: 0; }</style>
+  <div id="root" data-composition-id="s08" data-width="1920" data-height="1080">
+    <div class="win" id="s08-win" style="left:680px;top:178px;width:1140px;height:712px">
+      <div class="shot" id="s08-a"><img src="assets/ui/08-discover.png" alt="" style="left:-142.0px;top:-79.1px;width:1424.0px" /></div>
+      <div class="shot" id="s08-b"><img src="assets/ui/08-ask-to-join.png" alt="" style="left:-1104.8px;top:-712.0px;width:2330.2px" /></div>
+      <div class="shot" id="s08-c"><img src="assets/ui/08-inbox-request.png" alt="" style="left:-748.3px;top:-484.5px;width:2114.0px" /></div>
+      <div class="shot" id="s08-d"><img src="assets/ui/08-inbox-accepted.png" alt="" style="left:-823.0px;top:-247.7px;width:2228.9px" /></div>
+    </div>
+    <div class="win" id="s08-pw" style="left:640px;top:380px;width:1200px;height:304px"><div class="shot" id="s08-e"><img src="assets/ui/08-people.png" alt="" style="left:-181.7px;top:-673.1px;width:1563.4px" /></div></div>
+    <div id="s08-k1" class="cap" style="left:110px;top:380px;width:540px;font-size:80px"><span class="w">Find</span><span class="w">travelers</span><span class="w">going</span><span class="w">the</span><span class="w"><em>same</em></span><span class="w">way.</span></div>
+    <div id="s08-k2" class="cap" style="left:110px;top:400px;width:540px;font-size:80px"><span class="w">Ask</span><span class="w">to</span><span class="w">join</span><span class="w">with</span><span class="w">a</span><span class="w"><em>pitch.</em></span></div>
+    <div id="s08-k3" class="cap" style="left:110px;top:400px;width:540px;font-size:80px"><span class="w">Accept,</span><span class="w">and</span><span class="w">they</span><span class="w">are</span><span class="w"><em>in.</em></span></div>
+    <div id="s08-k4" class="cap" style="left:110px;top:380px;width:540px;font-size:80px"><span class="w">Know</span><span class="w">who</span><span class="w">you</span><span class="w">are</span><span class="w">traveling</span><span class="w"><em>with.</em></span></div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+  const inW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.07 }, t);
+  const outW = (sel, t) => tl.fromTo(sel + ' .w', { opacity: 1, y: 0 }, { opacity: 0, y: -24, duration: 0.28, ease: 'power3.in', stagger: 0.02, immediateRender: false }, t);
+  const fadeIn = (sel, t, d = 0.45) => tl.fromTo(sel, { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: d, ease: 'power4.out' }, t);
+  const fadeOut = (sel, t, d = 0.25) => tl.fromTo(sel, { opacity: 1 }, { opacity: 0, duration: d, ease: 'power3.in', immediateRender: false }, t);
+
+
+    tl.fromTo('#s08-win', { opacity: 0, x: 300 }, { opacity: 1, x: 0, duration: 0.6, ease: 'expo.out' }, 0);
+    inW('#s08-k1', 0.2);
+    outW('#s08-k1', 1.85);
+    tl.fromTo('#s08-b', { opacity: 0, x: 400 }, { opacity: 1, x: 0, duration: 0.45, ease: 'expo.out' }, 2.0);
+    inW('#s08-k2', 2.05);
+    outW('#s08-k2', 3.85);
+    tl.fromTo('#s08-c', { opacity: 0, x: 400 }, { opacity: 1, x: 0, duration: 0.45, ease: 'expo.out' }, 4.0);
+    inW('#s08-k3', 4.05);
+    fadeIn('#s08-d', 4.95, 0.3);
+    outW('#s08-k3', 5.85);
+    fadeOut('#s08-win', 5.95, 0.3);
+    tl.fromTo('#s08-pw', { opacity: 0, y: 120 }, { opacity: 1, y: 0, duration: 0.55, ease: 'expo.out' }, 6.0);
+    inW('#s08-k4', 6.05);
+    tl.fromTo(['#s08-pw', '#s08-k4'], { scale: 1, opacity: 1 }, { scale: 0.55, opacity: 0, duration: 0.42, ease: 'power3.in', immediateRender: false }, 7.55);
+    window.__timelines["s08"] = tl;
+  </script>
+</template>

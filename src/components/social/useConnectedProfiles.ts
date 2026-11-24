@@ -12,36 +12,46 @@ import type { Profile } from './index'
 
 const REFRESH_MS = 60_000
 
-let cached: Profile[] = []
-let fetchedAt = 0
-let inflight: Promise<Profile[]> | null = null
+type Entry = { rows: Profile[]; fetchedAt: number; inflight: Promise<Profile[]> | null }
 
-function load(): Promise<Profile[]> {
-  if (Date.now() - fetchedAt < REFRESH_MS) return Promise.resolve(cached)
-  inflight ??= callAction<Profile[]>('connectedProfiles', {})
+// Keyed by the signed-in user id so one account never sees another's
+// connections after a sign-out and sign-in in the same tab.
+const cache = new Map<string, Entry>()
+
+function load(userId: string): Promise<Profile[]> {
+  const entry = cache.get(userId) ?? { rows: [], fetchedAt: 0, inflight: null }
+  if (Date.now() - entry.fetchedAt < REFRESH_MS) return Promise.resolve(entry.rows)
+  if (entry.inflight) return entry.inflight
+  const inflight = callAction<Profile[]>('connectedProfiles', {})
     .then((rows) => {
-      cached = Array.isArray(rows) ? rows : []
-      fetchedAt = Date.now()
-      return cached
+      const fresh = Array.isArray(rows) ? rows : []
+      cache.set(userId, { rows: fresh, fetchedAt: Date.now(), inflight: null })
+      return fresh
     })
-    // A failed fetch keeps the last good list; hidden profiles then fall back
-    // to account names and the default avatar until the next refresh.
-    .catch(() => cached)
-    .finally(() => {
-      inflight = null
+    // A failed fetch keeps this user's last good list; hidden profiles then fall
+    // back to account names and the default avatar until the next refresh.
+    .catch(() => {
+      cache.set(userId, { ...entry, inflight: null })
+      return entry.rows
     })
+  cache.set(userId, { ...entry, inflight })
   return inflight
 }
 
-export function useConnectedProfiles(enabled: boolean): Profile[] {
-  const [rows, setRows] = useState<Profile[]>(cached)
+/** Connected hidden profiles for `userId`; empty when signed out. */
+export function useConnectedProfiles(userId: string | null | undefined): Profile[] {
+  const [state, setState] = useState<{ owner: string; rows: Profile[] }>({ owner: '', rows: [] })
   useEffect(() => {
-    if (!enabled) return
+    if (!userId) {
+      cache.clear()
+      return
+    }
     let live = true
-    void load().then((r) => live && setRows(r))
+    void load(userId).then((rows) => live && setState({ owner: userId, rows }))
     return () => {
       live = false
     }
-  }, [enabled])
-  return enabled ? rows : []
+  }, [userId])
+  // Never return rows fetched for a different identity.
+  return userId && state.owner === userId ? state.rows : []
 }

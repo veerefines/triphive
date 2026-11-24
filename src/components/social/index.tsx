@@ -70,8 +70,8 @@ export const VIBE_EMOJI: Record<string, string> = {
 export function usePeople() {
   const { records } = useQuery<Profile>('profiles', {})
   const { users } = useUsers()
-  const { isSignedIn } = useAuth()
-  const connected = useConnectedProfiles(!!isSignedIn)
+  const { userId } = useAuth()
+  const connected = useConnectedProfiles(userId)
   const person = useCallback(
     (uid: string) => {
       const p = records.find((r) => r.data.userId === uid)?.data ?? connected.find((c) => c.userId === uid)

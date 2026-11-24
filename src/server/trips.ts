@@ -12,7 +12,6 @@ import { googlePlacesSearch } from './google'
 import { checkPlan, summarizeForecast, tripDates, type DayForecast, type Issue, type PrefLike, type StopLike } from '../lib/planCheck'
 import { LIMITS, reserve } from './limits.js'
 import { placeKey } from '../lib/reviews'
-import { shareProfiles } from './profileViewers'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -173,7 +172,6 @@ export async function joinTrip(tools: ActionTools, userId: string, code: unknown
   const members = await listMembers(tools, trip.recordId)
   if (!members.some((m) => m.data.userId === userId)) {
     unwrap(await tools.create('team_members', { teamId: trip.recordId, userId, status: 'active', role: 'member' }), 'join')
-    await shareProfiles(tools, [...members.map((m) => m.data.userId), userId])
     await logActivity(tools, trip.recordId, userId, 'joined the trip')
   }
   return { tripId: trip.recordId }

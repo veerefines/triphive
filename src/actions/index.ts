@@ -44,6 +44,7 @@ import { safeHref } from '../lib/safeUrl'
 import { placePhotos } from '../server/photos'
 import { placeDetails } from '../server/placeDetails'
 import { seedStep, wipeStep } from '../server/demo'
+import { connectedProfiles } from '../server/profileAccess'
 
 /** Map thrown TripErrors to `{ success: false }`; let real bugs surface as 500. */
 function safe(fn: (ctx: ActionContext<Env>) => Promise<unknown>): ActionHandler<Env> {
@@ -241,6 +242,7 @@ export const actions: Record<string, ActionHandler<Env>> = {
 
   // ── Social layer (src/server/social.ts) ──
   saveProfile: safe(({ tools, userId, params }) => saveProfile(tools, userId, params)),
+  connectedProfiles: safe(({ tools, userId }) => connectedProfiles(tools, userId)),
   setVisibility: safe(({ tools, userId, params }) => setVisibility(tools, userId, params)),
   requestToJoin: safe(({ tools, userId, params }) => requestToJoin(tools, userId, params)),
   respondToRequest: safe(({ tools, userId, params }) => respondToRequest(tools, userId, params)),

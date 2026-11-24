@@ -4,13 +4,14 @@
  */
 import { useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { getUserColor, useQuery, useUsers } from 'deepspace'
+import { getUserColor, useAuth, useQuery, useUsers } from 'deepspace'
 import { BadgeCheck, CalendarDays, MapPin, Star, Users } from 'lucide-react'
 import { cn } from '@/components/ui'
 import type { FeaturedPlace } from '@/data/featured'
 import { DestinationCover } from './DestinationCover'
 import { PlaceImage } from '@/components/ui/PlaceImage'
 import { ProfilePeek } from './ProfilePeek'
+import { useConnectedProfiles } from './useConnectedProfiles'
 
 export type Profile = {
   userId: string
@@ -61,13 +62,19 @@ export const VIBE_EMOJI: Record<string, string> = {
   Foodie: '🍜', Chill: '🌴', Adventure: '🧗', Culture: '🏛️', Nightlife: '🪩', Nature: '🌿', Budget: '💸', Photography: '📸', 'Solo-friendly': '🎒',
 }
 
-/** Profiles + account names, resolved per user id. */
+/**
+ * Profiles + account names, resolved per user id. Synced rows cover the
+ * caller and listed travelers; hidden profiles of connected travelers come
+ * from the connectedProfiles action.
+ */
 export function usePeople() {
   const { records } = useQuery<Profile>('profiles', {})
   const { users } = useUsers()
+  const { isSignedIn } = useAuth()
+  const connected = useConnectedProfiles(!!isSignedIn)
   const person = useCallback(
     (uid: string) => {
-      const p = records.find((r) => r.data.userId === uid)?.data
+      const p = records.find((r) => r.data.userId === uid)?.data ?? connected.find((c) => c.userId === uid)
       const u = users.find((x) => x.id === uid)
       return {
         userId: uid,
@@ -77,7 +84,7 @@ export function usePeople() {
         color: getUserColor(uid),
       }
     },
-    [records, users],
+    [records, users, connected],
   )
   return { person, profiles: records }
 }

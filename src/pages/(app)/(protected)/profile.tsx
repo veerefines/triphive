@@ -102,6 +102,19 @@ export default function ProfilePage() {
           <Label htmlFor="pf-lang">Languages</Label>
           <Input id="pf-lang" maxLength={120} placeholder="English, Hindi, a little Portuguese" value={form.languages ?? ''} onChange={(e) => setForm({ ...form, languages: e.target.value })} />
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-background p-4">
+          <input
+            type="checkbox"
+            data-testid="profile-public"
+            checked={form.isPublic === 1}
+            onChange={(e) => setForm({ ...form, isPublic: e.target.checked ? 1 : 0 })}
+            className="mt-0.5 size-4 accent-[var(--color-honey)]"
+          />
+          <span className="text-sm">
+            <b>List me on People</b>
+            <span className="block text-muted-foreground">Other travelers can find your profile and invite you along. Hosts always see it when you ask to join.</span>
+          </span>
+        </label>
         <Button type="submit" loading={saving} className="w-full">Save profile</Button>
       </form>
     </div>

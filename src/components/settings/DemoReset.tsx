@@ -63,8 +63,8 @@ export function DemoReset() {
     <section data-testid="demo-reset" className="mt-8 rounded-lg border border-destructive/40 bg-card p-6">
       <h2 className="mb-1 text-lg font-semibold">Demo data</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Deletes <b>every</b> trip, chat, request and review in the app, then seeds Lisbon, Meghalaya, Tokyo and Barcelona with
-        three demo travelers. This cannot be undone. Type {CONFIRM_WORD} to enable.
+        Deletes <b>every</b> trip, chat, request and review in the app, then seeds Meghalaya, Lisbon, San Diego, Bhutan and Tokyo with
+        six demo travelers. This cannot be undone. Type {CONFIRM_WORD} to enable.
       </p>
       <div className="flex gap-2">
         <Input

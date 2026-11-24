@@ -27,6 +27,8 @@ export const profilesSchema: CollectionSchema = {
     { name: 'travelStyle', storage: 'text', interpretation: 'plain' },
     { name: 'interests', storage: 'text', interpretation: { kind: 'json' } }, // string[]
     { name: 'languages', storage: 'text', interpretation: 'plain' },
+    // 1 = listed in the People directory. Off by default: listing is opt-in.
+    { name: 'isPublic', storage: 'number', interpretation: 'plain' },
   ],
   uniqueOn: ['userId'],
   ownerField: 'userId',

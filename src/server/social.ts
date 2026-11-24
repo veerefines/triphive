@@ -52,6 +52,7 @@ export async function saveProfile(tools: ActionTools, userId: string, p: Record<
     travelStyle: str(p.travelStyle, 40),
     interests,
     languages: str(p.languages, 120),
+    isPublic: p.isPublic === true || p.isPublic === 1 ? 1 : 0,
   }
   const existing = await tools.query('profiles', { where: { userId }, limit: 1 })
   const row = existing.success ? existing.data.records[0] : undefined

@@ -21,6 +21,8 @@ export type Profile = {
   travelStyle?: string
   interests?: string[]
   languages?: string
+  /** 1 = listed on the People page. */
+  isPublic?: number
 }
 
 export type Listing = {

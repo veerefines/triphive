@@ -2,10 +2,10 @@
  * Place card Hive posts into the group chat: swipeable photo hero, Google
  * rating, TripHive Featured perk, what other TripHivers said, image rails for
  * must-try dishes / food nearby / things to do (each nearby tile one-tap
- * addable), cost in the destination currency, and one-tap Add / Rate.
+ * addable), cost in the destination currency, and one-tap Add / Put to vote / Rate.
  */
 import { useState } from 'react'
-import { BadgeCheck, Check, ChevronDown, MapPin, Plus, Star } from 'lucide-react'
+import { BadgeCheck, Check, ChevronDown, MapPin, Plus, Star, Vote } from 'lucide-react'
 import { Button, cn, useToast } from '@/components/ui'
 import { RateRow } from './PlaceReviewForm'
 import { PlaceGallery, PlaceImage } from '@/components/ui/PlaceImage'
@@ -39,6 +39,24 @@ function useAddStop(tripId: string, labelFor: (d: string) => string) {
     } catch (err) {
       setState('idle')
       toast.error('Could not add', (err as Error).message)
+    }
+  }
+}
+
+type VoteState = 'idle' | 'sending' | 'sent'
+
+/** Put a Hive pick to the group: it lands in Votes and applies on a majority. */
+function useProposeStop(tripId: string) {
+  const toast = useToast()
+  return async (date: string, stop: Record<string, unknown>, reason: string, setState: (s: VoteState) => void) => {
+    setState('sending')
+    try {
+      await callAction('suggestStop', { tripId, stop: { ...stop, date }, reason })
+      setState('sent')
+      toast.success('Sent to Votes', `The group can approve ${String(stop.title)}`)
+    } catch (err) {
+      setState('idle')
+      toast.error('Could not start a vote', (err as Error).message)
     }
   }
 }
@@ -110,13 +128,16 @@ export function HiveCard({ card: c, tripId, destination, dates, labelFor, money 
   const [state, setState] = useState<AddState>('idle')
   const [isRating, setIsRating] = useState(false)
   const [isTipsOpen, setIsTipsOpen] = useState(false)
+  const [voteState, setVoteState] = useState<VoteState>('idle')
   const addStop = useAddStop(tripId, labelFor)
+  const proposeStop = useProposeStop(tripId)
   const cost = c.costPerPersonUsd ?? c.community.avgSpentUsd ?? undefined
   const home = typeof cost === 'number' && cost > 0 ? money.homeLabel(cost) : null
   const near = { lat: c.lat, lng: c.lng }
 
-  const addMain = () =>
-    addStop(date, { title: c.name, category: c.category, notes: c.why, address: c.address, lat: c.lat, lng: c.lng, url: safeHref(c.mapsUrl), costPerPerson: cost, rating: c.rating, ratingCount: c.ratingCount }, setState)
+  const mainStop = { title: c.name, category: c.category, notes: c.why, address: c.address, lat: c.lat, lng: c.lng, url: safeHref(c.mapsUrl), costPerPerson: cost, rating: c.rating, ratingCount: c.ratingCount }
+  const addMain = () => addStop(date, mainStop, setState)
+  const voteMain = () => proposeStop(date, mainStop, c.why || `Hive pick for ${labelFor(date)}`, setVoteState)
   const addNearby = (category: string) => (name: string, set: (s: AddState) => void) =>
     addStop(date, { title: name, category, notes: `Near ${c.name} (Hive)` }, set)
 
@@ -169,6 +190,9 @@ export function HiveCard({ card: c, tripId, destination, dates, labelFor, money 
           </select>
         )}
         <Button size="sm" onClick={addMain} loading={state === 'adding'} disabled={state === 'added' || !date}>{state === 'added' ? 'Added ✓' : 'Add to plan'}</Button>
+        <Button size="sm" variant="outline" data-testid="hive-vote" onClick={voteMain} loading={voteState === 'sending'} disabled={voteState === 'sent' || state === 'added' || !date}>
+          <Vote className="size-3.5" /> {voteState === 'sent' ? 'In Votes ✓' : 'Put to vote'}
+        </Button>
         <Button size="sm" variant="ghost" aria-expanded={isRating} onClick={() => setIsRating((v) => !v)}><Star className="size-3.5" /> Rate</Button>
       </footer>
       {isRating && <div className="pb-3"><RateRow tripId={tripId} name={c.name} onDone={() => setIsRating(false)} /></div>}

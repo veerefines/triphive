@@ -82,7 +82,7 @@ describe('planSeed', () => {
   it('writes one listing per public trip with a real host name', () => {
     const plan = planSeed(input())
     expect(plan.listings).toHaveLength(DEMO_TRIPS.filter((t) => t.listing).length)
-    expect(plan.listings.map((l) => l.hostName)).toEqual(expect.arrayContaining(['Owner', 'Aiko Tanaka', 'Marco Rossi']))
+    expect(plan.listings.map((l) => l.hostName)).toEqual(expect.arrayContaining(['Owner', 'Maya Alvarez', 'Tenzin Wangchuk', 'Aiko Tanaka']))
     expect(plan.listings.every((l) => l.hostName !== 'Traveler')).toBe(true)
   })
 
@@ -111,6 +111,13 @@ describe('planSeed', () => {
     const plan = planSeed(input())
     const tripIds = new Set(plan.trips.map((t) => t.id))
     for (const r of plan.reviews) expect(tripIds.has(String(r.tripId))).toBe(true)
+  })
+
+  it('lists every persona on People and ends each chat with an @Hive ask', () => {
+    const plan = planSeed(input())
+    expect(plan.profiles.length).toBeGreaterThanOrEqual(6)
+    expect(plan.profiles.every((p) => p.data.isPublic === 1)).toBe(true)
+    for (const t of DEMO_TRIPS) expect(t.chat[t.chat.length - 1]!.text.startsWith('@Hive ')).toBe(true)
   })
 
   it('writes prefs and profiles as the user they belong to', () => {

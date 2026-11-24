@@ -1,14 +1,13 @@
 /**
- * Hive in the group chat.
+ * Hive in the group chat, summoned with `@Hive`.
  *
- * After a member posts in a trip's group chat, the client pings
- * POST /api/trips/:tripId/hive-chat. Hive reads the recent conversation and
- * either stays quiet (replies NOOP) or:
- *  - adds stops the group clearly agreed on, directly (source 'ai', logged
- *    in the activity feed so everyone sees what changed), and/or
- *  - posts a place card for a place that came up: rating, must-try dishes,
- *    nearby food and things to do, cost, TripHive Featured perk and what
- *    other TripHivers said.
+ * When a member's message mentions @Hive, the client pings
+ * POST /api/trips/:tripId/hive-chat. Hive answers only that message (plus a
+ * three-line tail of context and a one-line-per-day plan summary, never the
+ * whole chat) and replies with up to two researched place cards: rating,
+ * must-try dishes, nearby food and things to do, cost, TripHive Featured perk
+ * and what other TripHivers said. Hive never edits the plan itself: members
+ * add a card to the plan or put it to a group vote from the card.
  *
  * Membership is checked before any model call, and every run reserves a
  * turn from the trip's daily group budget, the caller's daily Hive budget and
@@ -21,16 +20,19 @@ import { loggableError, type ActionTools } from 'deepspace/worker'
 import { HIVE_CONTEXT_CONFIG, HIVE_MAX_OUTPUT_TOKENS, HIVE_MAX_STEPS, capTools, resolveHiveModels, groqModel, hasGroq, hiveCooldown, rateLimitRetryAfter } from './llm.js'
 import { LIMITS, reserveAll } from '../server/limits.js'
 import { createActionTools } from '../server/action-routes.js'
-import { TripError, addStopOnce, cleanStop, findPlaces, getTrip, googleGate, logActivity, requireMember, userNames, type StopData } from '../server/trips.js'
+import { TripError, findPlaces, getTrip, googleGate, requireMember, userNames, type StopData } from '../server/trips.js'
 import { featuredNear } from '../data/featured.js'
 import { placeKey, summarizeReviews, type PlaceReviewData } from '../lib/reviews.js'
 import { buildTripTools } from './trip-tools.js'
+import { buildHiveAsk, summarizePlan, CONTEXT_LINES, type ChatLine, type HiveAsk } from './hive-ask.js'
+import { tripDates } from '../lib/planCheck.js'
 import type { AppContext } from '../../worker.js'
 
-const HISTORY = 20
-const MAX_ADDS_PER_RUN = 3
+/** The mention plus a short context tail; Hive never reads further back. */
+const HISTORY = CONTEXT_LINES + 3
 const MAX_CARDS_PER_RUN = 2
-const MIN_TEXT_LENGTH = 4
+const MAX_PLAN_STOPS = 120
+const GROUP_MAX_STEPS = 5
 const TRIP_ID = /^[\w-]{1,80}$/
 export const HIVE_SENDER = 'hive'
 /** Cloudflare cancels waitUntil work ~30s after the response; finish well before. */
@@ -39,8 +41,6 @@ const BUSY_REPLY = "I'm a little swamped right now. Ask me again in a minute and
 const isTimeout = (err: unknown) => err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
 
 type RequireAccess = (c: Context<AppContext>) => Promise<{ auth: { userId: string } } | Response>
-
-type ChatRow = { senderId: string; text: string }
 
 export interface PlaceCard {
   name: string
@@ -63,7 +63,6 @@ export interface PlaceCard {
   added?: boolean
 }
 
-const HHMM = z.string().regex(/^([01]?\d|2[0-3]):[0-5]\d$/)
 const YMD = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const CATEGORY = z.enum(['food', 'sight', 'activity', 'stay', 'transport', 'other'])
 const shortList = z.array(z.string().min(1).max(80)).max(5)
@@ -77,47 +76,12 @@ async function communityFor(tools: ActionTools, name: string, destination: strin
   return { ...summarizeReviews(rows), quotes: rows.map((r) => r.text).filter((t): t is string => !!t).slice(0, 3) }
 }
 
-function groupTools(tools: ActionTools, tripId: string, userId: string, googleKey: string | undefined, out: { cards: PlaceCard[]; added: string[] }): ToolSet {
+function groupTools(tools: ActionTools, tripId: string, userId: string, googleKey: string | undefined, out: { cards: PlaceCard[] }): ToolSet {
   const base = buildTripTools(tools, tripId, userId, googleKey)
   const google = googleGate(tools, userId, googleKey)
   return {
-    get_trip_overview: base.get_trip_overview,
     search_places: base.search_places,
     get_featured_places: base.get_featured_places,
-    find_coordinates: base.find_coordinates,
-
-    add_stop_now: tool({
-      description:
-        'Add a stop to the shared itinerary right away. ONLY when the chat shows the group agreed ("let\'s do X Saturday", "book it", "add X"). Use find_coordinates first for lat/lng. Pick a free time slot on that day.',
-      inputSchema: z.object({
-        date: YMD,
-        title: z.string().min(1).max(120),
-        start: HHMM.optional(),
-        end: HHMM.optional(),
-        category: CATEGORY.optional(),
-        lat: z.number().optional(),
-        lng: z.number().optional(),
-        address: z.string().max(300).optional(),
-        costPerPerson: z.number().min(0).optional().describe('USD'),
-        outdoor: z.boolean().optional(),
-        notes: z.string().max(500).optional(),
-        because: z.string().max(160).describe('Quote or paraphrase of the chat that agreed on it'),
-      }),
-      execute: async ({ because, ...stop }) => {
-        if (out.added.length >= MAX_ADDS_PER_RUN) return { error: `At most ${MAX_ADDS_PER_RUN} adds per message.` }
-        try {
-          const clean = cleanStop(stop as Partial<StopData>, false)
-          const { stopId, isDuplicate } = await addStopOnce(tools, tripId, clean, 'ai')
-          if (isDuplicate) return { added: false, stopId, note: `${clean.title} is already on ${clean.date}; not added again.` }
-          await logActivity(tools, tripId, HIVE_SENDER, `added ${clean.title} on ${clean.date} from group chat — ${because}`)
-          out.added.push(`${clean.title} (${clean.date}${clean.start ? ` ${clean.start}` : ''})`)
-          return { added: true, stopId }
-        } catch (err) {
-          if (err instanceof TripError) return { error: err.message }
-          throw err
-        }
-      },
-    }),
 
     share_place_card: tool({
       description:
@@ -159,16 +123,16 @@ function groupTools(tools: ActionTools, tripId: string, userId: string, googleKe
 
 function groupPrompt(today: string): string {
   return [
-    'You are Hive, the trip assistant sitting in a group chat of friends planning a trip together in TripHive.',
-    `Today is ${today}. You see the latest messages; the LAST one just arrived.`,
+    'You are Hive, the trip assistant in a TripHive group chat. A member just called you with @Hive.',
+    `Today is ${today}. You get their request, a few lines of recent chat for context, and the current plan by day.`,
     '',
-    'Decide if the last message needs you. Reply with exactly NOOP (nothing else) when it is small talk, logistics between people, or already handled.',
-    'Act when:',
-    '- The group AGREED on a place/time ("let\'s do X Saturday", "add X", "book it") → get_trip_overview for free slots, find_coordinates, then add_stop_now. Never add something only one person floated; suggest it instead.',
-    '- A specific place came up or someone asks about one → share_place_card with real dishes, nearby food, things to do, tips and cost. Call get_featured_places first and prefer TripHive Featured places.',
-    '- Someone asks for ideas → up to 2 share_place_card calls for the best fits (search_places first).',
-    'After tools, write ONE short chat reply (max 2 sentences, friendly, no markdown headings). Say what you added. Mention other TripHivers\' rating when the card has reviews.',
-    'Costs are USD; say "≈$". Respect the slowest pace and tightest budget among members.',
+    'When the request is about places (food, things to do, "add something", "find X near Y", "surprise us"):',
+    '- Research with search_places (and get_featured_places; prefer TripHive Featured places).',
+    '- Then call share_place_card once or twice for the best real, specific places. Fill mustTry, nearbyFood, thingsToDo, tips and a USD cost per person.',
+    '- Set date to the trip day it fits best: near related stops, or a (free) day.',
+    'You never add stops yourself. Members tap Add to plan or Put to vote on your card.',
+    'For any other question, answer directly without cards.',
+    'Finish with ONE short chat reply (max 2 sentences, friendly, no markdown headings). Costs are USD; say "≈$".',
   ].join('\n')
 }
 
@@ -177,12 +141,27 @@ interface RunProgress {
   steps: number
 }
 
-async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: string, userId: string, rows: ChatRow[], progress: RunProgress): Promise<void> {
-  const names = await userNames(tools, [...new Set(rows.map((r) => r.senderId).filter((s) => s !== HIVE_SENDER))])
-  const full = rows.map((r) => `${r.senderId === HIVE_SENDER ? 'Hive' : (names[r.senderId]?.name ?? 'Traveler')}: ${r.text}`).join('\n')
-  // Newest messages matter most; keep the tail within Hive's Groq budget.
-  const transcript = full.length > HIVE_CONTEXT_CONFIG.contextBudget ? full.slice(-HIVE_CONTEXT_CONFIG.contextBudget) : full
-  const out = { cards: [] as PlaceCard[], added: [] as string[] }
+async function planSummary(tools: ActionTools, tripId: string): Promise<{ destination: string; plan: string }> {
+  const trip = await getTrip(tools, tripId)
+  if (!trip) throw new TripError('Trip not found')
+  const stops = await tools.query<StopData>('stops', { where: { tripId }, limit: MAX_PLAN_STOPS })
+  const rows = stops.success ? stops.data.records.map((r) => r.data) : []
+  return { destination: trip.data.destination, plan: summarizePlan(tripDates(trip.data.startDate, trip.data.endDate), rows) }
+}
+
+async function hivePrompt(tools: ActionTools, tripId: string, ask: HiveAsk): Promise<string> {
+  const names = await userNames(tools, [...new Set(ask.context.map((r) => r.senderId))])
+  const context = ask.context.map((r) => `${names[r.senderId]?.name ?? 'Traveler'}: ${r.text}`).join('\n')
+  const { destination, plan } = await planSummary(tools, tripId)
+  const prompt = [`Trip to ${destination}. Plan by day:`, plan, context && `Recent chat:\n${context}`, `Request: ${ask.question}`]
+    .filter(Boolean)
+    .join('\n\n')
+  return prompt.length > HIVE_CONTEXT_CONFIG.contextBudget ? prompt.slice(-HIVE_CONTEXT_CONFIG.contextBudget) : prompt
+}
+
+async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: string, userId: string, ask: HiveAsk, progress: RunProgress): Promise<void> {
+  const prompt = await hivePrompt(tools, tripId, ask)
+  const out = { cards: [] as PlaceCard[] }
   const abortSignal = AbortSignal.timeout(RUN_DEADLINE_MS)
   // No SDK retry on the main model: a 429 there switches straight to the fast
   // model, which has its own Groq token budget.
@@ -195,9 +174,9 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
       },
       model: groqModel(c.env, modelId),
       instructions: groupPrompt(new Date().toISOString().slice(0, 10)),
-      messages: [{ role: 'user', content: `Group chat so far:\n${transcript}` }],
+      messages: [{ role: 'user', content: prompt }],
       tools: capTools(groupTools(tools, tripId, userId, c.env.GOOGLE_MAPS_API_KEY, out)),
-      stopWhen: isStepCount(HIVE_MAX_STEPS),
+      stopWhen: isStepCount(Math.min(GROUP_MAX_STEPS, HIVE_MAX_STEPS)),
       maxOutputTokens: HIVE_MAX_OUTPUT_TOKENS,
     })
   const models = await resolveHiveModels(c.env)
@@ -209,13 +188,11 @@ async function runHive(c: Context<AppContext>, tools: ActionTools, tripId: strin
     // Main model rate-limited before doing anything: retry once on the fast one.
     const wait = rateLimitRetryAfter(err)
     if (wait != null) hiveCooldown.rateLimited(first, wait)
-    if (wait == null || first === models.fast || out.cards.length || out.added.length) throw err
+    if (wait == null || first === models.fast || out.cards.length) throw err
     result = await call(models.fast, 1)
   }
   const text = result.text.trim()
-  const isQuiet = (!text || /^NOOP\.?$/i.test(text)) && out.cards.length === 0 && out.added.length === 0
-  if (isQuiet) return
-  const reply = text && !/^NOOP\.?$/i.test(text) ? text.slice(0, 1000) : out.added.length ? `Added ${out.added.join(', ')} to the plan.` : 'Here you go 👇'
+  const reply = text ? text.slice(0, 1000) : out.cards.length ? 'Here are my picks 👇 Add one to the plan or put it to a vote.' : "I couldn't find anything solid for that. Try naming an area or a kind of place."
   const r = await tools.create('trip_messages', { tripId, senderId: HIVE_SENDER, text: reply, ...(out.cards.length ? { cards: out.cards } : {}) })
   if (!r.success) console.error(`[hive-group] reply write failed: ${r.error}`)
 }
@@ -239,13 +216,12 @@ export function registerHiveGroupRoute(app: Hono<AppContext>, requireAccess: Req
       throw err
     }
 
-    const res = await tools.query<ChatRow>('trip_messages', { where: { tripId }, orderBy: 'createdAt', orderDir: 'desc', limit: HISTORY })
+    const res = await tools.query<ChatLine & Record<string, unknown>>('trip_messages', { where: { tripId }, orderBy: 'createdAt', orderDir: 'desc', limit: HISTORY })
     if (!res.success) return c.json({ error: 'Could not read chat' }, 503)
-    const rows = res.data.records.map((r) => r.data).reverse()
-    const last = rows.at(-1)
-    // Only the author of the newest message triggers Hive, so one message = at
-    // most one run, and Hive never answers itself.
-    if (!last || last.senderId !== userId || last.text.trim().length < MIN_TEXT_LENGTH) return c.json({ skipped: true })
+    // Only the author of the newest message, and only when it says @Hive, so
+    // one mention = at most one run and plain chatter costs nothing.
+    const ask = buildHiveAsk(res.data.records.map((r) => r.data).reverse(), userId)
+    if (!ask) return c.json({ skipped: true })
 
     if (!hasGroq(c.env)) return c.json({ skipped: true, reason: 'Hive is offline: GROQ_API_KEY is not set' })
     const reservation = await reserveAll(tools, [
@@ -257,7 +233,7 @@ export function registerHiveGroupRoute(app: Hono<AppContext>, requireAccess: Req
 
     // Finish even if the tab closes: the reply lands in the shared chat.
     const progress: RunProgress = { steps: 0 }
-    const run = runHive(c, tools, tripId, userId, rows, progress).catch(async (err) => {
+    const run = runHive(c, tools, tripId, userId, ask, progress).catch(async (err) => {
       console.error(`[hive-group] failed: ${loggableError(err)}`)
       if (rateLimitRetryAfter(err) == null && !isTimeout(err)) return
       // Refund only when no model step completed; otherwise the turn was used.

@@ -5,11 +5,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from 'deepspace'
-import { Globe2, Lock, Send } from 'lucide-react'
+import { AtSign, Globe2, Lock, Send } from 'lucide-react'
 import { Button, Label, Modal, Textarea, cn, useToast } from '@/components/ui'
 import { FeaturedCard, PersonAvatar, ProfilePeek, PublicTripCard, VIBES, VIBE_EMOJI, type Listing } from '@/components/social'
 import { featuredNear } from '@/data/featured'
 import { callAction } from '@/lib/api'
+import { HIVE_HANDLE, isHiveMention } from '@/lib/mention'
 import { matchLabel, matchTrips } from '@/lib/match'
 import { getAuthToken } from 'deepspace'
 import type { PlaceCard } from '@/ai/hive-group'
@@ -143,6 +144,24 @@ type TripMsg = { tripId: string; senderId: string; text: string; cards?: PlaceCa
 
 const HIVE = 'hive'
 const HIVE_WAIT_MS = 45_000
+const HANDLE_SPLIT = /(@hive\b)/i
+
+/** Message text with every @Hive handle highlighted. */
+function MessageText({ text, mine }: { text: string; mine: boolean }) {
+  return (
+    <>
+      {text.split(HANDLE_SPLIT).map((part, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className={cn('rounded-md px-1 font-semibold', mine ? 'bg-[var(--color-honey)] text-white' : 'bg-honey/20 text-[#9a3f12]')}>
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  )
+}
 
 interface GroupChatProps {
   tripId: string
@@ -154,7 +173,7 @@ interface GroupChatProps {
   money: TripMoney
 }
 
-/** Ask Hive to read the chat. It replies into trip_messages, so the live query shows it. */
+/** Ask Hive to answer the newest @Hive mention. It replies into trip_messages, so the live query shows it. */
 async function pingHive(tripId: string): Promise<{ accepted?: boolean; error?: string }> {
   const token = await getAuthToken()
   const res = await fetch(`/api/trips/${encodeURIComponent(tripId)}/hive-chat`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
@@ -168,6 +187,7 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
   const [text, setText] = useState('')
   const [hiveSince, setHiveSince] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const msgs = [...records].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const lastHiveAt = [...msgs].reverse().find((m) => m.data.senderId === HIVE)?.createdAt
   const isHiveThinking = !!hiveSince && !(lastHiveAt && lastHiveAt > hiveSince)
@@ -176,7 +196,7 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
   }, [msgs.length, isHiveThinking])
   useEffect(() => {
     if (!hiveSince) return
-    // Hive answers NOOP silently; stop the indicator after a while.
+    // Never leave the indicator hanging if a reply is lost.
     const t = setTimeout(() => setHiveSince(null), HIVE_WAIT_MS)
     return () => clearTimeout(t)
   }, [hiveSince])
@@ -188,6 +208,8 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
     setText('')
     try {
       await callAction('sendTripMessage', { tripId, text: body })
+      // Plain chatter costs nothing: Hive only runs when someone calls it.
+      if (!isHiveMention(body)) return
       const since = new Date().toISOString()
       pingHive(tripId)
         .then((r) => {
@@ -201,6 +223,11 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
     }
   }
 
+  function callHive() {
+    setText((t) => (isHiveMention(t) ? t : `${HIVE_HANDLE} ${t.trimStart()}`))
+    inputRef.current?.focus()
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -208,7 +235,9 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
           <div className="py-10 text-center">
             <p className="text-3xl">💬</p>
             <p className="mt-1 font-semibold">Group chat</p>
-            <p className="text-sm text-muted-foreground">Say hi to everyone on the trip. Hive listens in: agree on a place and it lands in the plan.</p>
+            <p className="mx-auto max-w-xs text-sm text-muted-foreground">
+              Say hi to everyone on the trip. Need ideas? Type <b className="text-foreground">@Hive</b> and ask, like “@Hive find a café near Dawki”. Hive researches and drops place cards you can add or put to a vote.
+            </p>
           </div>
         )}
         {msgs.map((m, i) => {
@@ -228,7 +257,7 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
               <div className="max-w-[78%]">
                 {showName && <p className="mb-0.5 ml-1 text-[11px] text-muted-foreground">{isHive ? 'Hive' : nameOf(m.data.senderId)}</p>}
                 <p data-testid="group-msg" className={cn('whitespace-pre-wrap rounded-3xl px-3.5 py-2 text-sm', mine ? 'rounded-br-md bg-foreground text-background' : isHive ? 'rounded-bl-md bg-honey/15' : 'rounded-bl-md bg-muted')}>
-                  {m.data.text}
+                  <MessageText text={m.data.text} mine={mine} />
                 </p>
                 {isHive && (m.data.cards ?? []).map((c) => <HiveCard key={c.name} card={c} tripId={tripId} destination={destination} dates={dates} labelFor={labelFor} money={money} />)}
               </div>
@@ -238,13 +267,23 @@ export function GroupChat({ tripId, destination, me, nameOf, dates, labelFor, mo
         {isHiveThinking && (
           <p data-testid="hive-thinking" className="anim-in flex items-center gap-2 pl-1 text-xs text-muted-foreground">
             <HiveAvatar />
-            <span className="animate-pulse">Hive is reading the chat…</span>
+            <span className="animate-pulse">Hive is researching…</span>
           </p>
         )}
         <div ref={endRef} />
       </div>
       <form onSubmit={send} className="flex items-center gap-2 border-t border-border p-2.5">
-        <input aria-label="Message the group" value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} placeholder="Message the group…" className="h-10 min-w-0 flex-1 rounded-full border border-border bg-background px-4 text-sm outline-none focus:border-foreground/40" />
+        <button
+          type="button"
+          data-testid="call-hive"
+          onClick={callHive}
+          title="Ask Hive for places"
+          className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-honey/15 px-3 text-xs font-semibold text-[#9a3f12] transition hover:bg-honey/25 active:scale-[0.97]"
+        >
+          <AtSign className="size-3.5" aria-hidden />
+          Hive
+        </button>
+        <input ref={inputRef} aria-label="Message the group" value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} placeholder="Message the group, or @Hive for ideas…" className="h-10 min-w-0 flex-1 rounded-full border border-border bg-background px-4 text-sm outline-none focus:border-foreground/40" />
         <button type="submit" aria-label="Send" disabled={!text.trim()} className="flex size-10 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-40">
           <Send className="size-4" />
         </button>

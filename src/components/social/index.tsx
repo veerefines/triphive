@@ -119,6 +119,7 @@ export function PublicTripCard({
           destination={l.destination}
           lat={l.lat}
           lng={l.lng}
+          seedKey={l.tripId}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
         {badge && (
@@ -169,7 +170,7 @@ export function PublicTripCard({
 export function FeaturedCard({ place: f, action, compact = false }: { place: FeaturedPlace; action?: ReactNode; compact?: boolean }) {
   const emoji = { food: '🍽️', sight: '🏛️', activity: '🎟️', stay: '🛏️' }[f.category]
   return (
-    <div data-testid="featured-place" className={cn('relative flex shrink-0 flex-col overflow-hidden rounded-3xl border border-border bg-card', compact ? 'w-64' : 'w-72')}>
+    <div data-testid="featured-place" className={cn('relative flex shrink-0 snap-start flex-col overflow-hidden rounded-3xl border border-border bg-card', compact ? 'w-64' : 'w-72')}>
       <div className="group relative flex h-32 items-end overflow-hidden bg-gradient-to-br from-[var(--color-honey-soft)] to-[var(--color-muted)] p-3">
         <PlaceImage query={{ q: f.name, near: f.city, lat: f.lat, lng: f.lng }} alt={f.name} emoji={emoji} className="absolute inset-0" imgClassName="group-hover:scale-105" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />

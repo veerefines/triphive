@@ -26,6 +26,8 @@ type DestinationCoverProps = {
   lng?: number
   /** Show the slide dots (default true). */
   hasIndicator?: boolean
+  /** Varies the first photo, so trips to the same city do not look identical. */
+  seedKey?: string
 }
 
 function hashOf(text: string): number {
@@ -40,7 +42,7 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-export function DestinationCover({ destination, lat, lng, hasIndicator = true }: DestinationCoverProps) {
+export function DestinationCover({ destination, lat, lng, hasIndicator = true, seedKey = '' }: DestinationCoverProps) {
   const { urls, isLoading } = usePlacePhotos(destination ? { q: destination, lat, lng, max: COVER_PHOTOS } : null)
   const [loaded, setLoaded] = useState<ReadonlySet<string>>(() => new Set())
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set())
@@ -50,7 +52,8 @@ export function DestinationCover({ destination, lat, lng, hasIndicator = true }:
   const ready = slides.filter((u) => loaded.has(u))
   const seed = hashOf(destination.toLowerCase())
   const gradient = FALLBACK_GRADIENTS[seed % FALLBACK_GRADIENTS.length]
-  const active = ready.length ? ready[tick % ready.length] : null
+  const startSlide = seedKey ? hashOf(seedKey) : 0
+  const active = ready.length ? ready[(startSlide + tick) % ready.length] : null
 
   useEffect(() => {
     if (ready.length < 2 || prefersReducedMotion()) return
@@ -59,12 +62,12 @@ export function DestinationCover({ destination, lat, lng, hasIndicator = true }:
     const start = setTimeout(() => {
       setTick((i) => i + 1)
       timer = setInterval(() => setTick((i) => i + 1), SLIDE_MS)
-    }, SLIDE_MS + (seed % MAX_START_OFFSET_MS))
+    }, SLIDE_MS + ((seed + startSlide) % MAX_START_OFFSET_MS))
     return () => {
       clearTimeout(start)
       if (timer) clearInterval(timer)
     }
-  }, [ready.length, seed])
+  }, [ready.length, seed, startSlide])
 
   return (
     <>

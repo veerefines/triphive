@@ -342,6 +342,7 @@ export default function TripPage() {
               date={d}
               index={i}
               trip={t}
+              money={money}
               stops={stops.filter((s) => s.data.date === d)}
               issues={issues}
               peers={peers}
@@ -361,6 +362,7 @@ export default function TripPage() {
               date={d}
               index={null}
               trip={t}
+              money={money}
               stops={stops.filter((s) => s.data.date === d)}
               issues={issues}
               peers={peers}

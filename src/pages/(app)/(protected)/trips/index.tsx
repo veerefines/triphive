@@ -5,12 +5,13 @@ import { ArrowRight, CalendarDays, LogOut, MapPin, Plus, Ticket, Trash2 } from '
 import { Button, ConfirmModal, Input, Label, useToast } from '@/components/ui'
 import { callAction } from '@/lib/api'
 import { tripDates } from '@/lib/planCheck'
+import { addLocalDays, localIsoDate } from '@/lib/localDate'
 import { DestinationCover } from '@/components/social/DestinationCover'
 
 type Trip = { title: string; destination: string; startDate: string; endDate: string; lat?: number; lng?: number; visibility?: string }
 
 function countdown(start: string, end: string) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localIsoDate()
   if (end < today) return 'Past trip'
   if (start <= today) return 'Happening now'
   const days = Math.round((Date.parse(start) - Date.parse(today)) / 86_400_000)
@@ -19,12 +20,6 @@ function countdown(start: string, end: string) {
 
 function fmt(d: string) {
   return new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
-}
-
-function addDays(d: Date, n: number) {
-  const c = new Date(d)
-  c.setDate(c.getDate() + n)
-  return c.toISOString().slice(0, 10)
 }
 
 export default function TripsPage() {
@@ -61,8 +56,8 @@ export default function TripsPage() {
   const [form, setForm] = useState({
     title: '',
     destination: '',
-    startDate: addDays(today, 1),
-    endDate: addDays(today, 3),
+    startDate: addLocalDays(today, 1),
+    endDate: addLocalDays(today, 3),
   })
 
   async function create(e: FormEvent) {
@@ -91,7 +86,7 @@ export default function TripsPage() {
     }
   }
 
-  const todayIso = today.toISOString().slice(0, 10)
+  const todayIso = localIsoDate(today)
   const visible = trips.filter((t) => !hidden.has(t.recordId))
   const upcoming = visible.filter((t) => t.data.endDate >= todayIso)
   const past = visible.filter((t) => t.data.endDate < todayIso).reverse()
@@ -214,7 +209,7 @@ export default function TripsPage() {
                   { label: '4 days', days: 3 },
                   { label: 'A week', days: 6 },
                 ].map((p) => {
-                  const end = addDays(new Date(`${form.startDate}T12:00:00`), p.days)
+                  const end = addLocalDays(new Date(`${form.startDate}T12:00:00`), p.days)
                   const active = form.endDate === end
                   return (
                     <button
@@ -332,6 +327,7 @@ function TripCard({
           destination={t.destination}
           lat={t.lat}
           lng={t.lng}
+          seedKey={id}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-black/0" />
         <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 font-mono text-[11px] font-semibold text-[#1c1814] shadow-sm backdrop-blur">

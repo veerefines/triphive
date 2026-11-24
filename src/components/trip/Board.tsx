@@ -7,6 +7,7 @@ import { sortDay, toMinutes } from '@/lib/planCheck'
 import { callAction } from '@/lib/api'
 import { PlaceImage } from '@/components/ui/PlaceImage'
 import { CATEGORY_META, type IssueRow, type Stop, type Trip } from './types'
+import type { TripMoney } from './useTripMoney'
 
 type Peer = { userId: string; userName: string; state: Record<string, unknown> }
 
@@ -30,7 +31,9 @@ export function ItineraryDay({
   activeStopId,
   onHoverStop,
   onDetails,
+  money,
 }: {
+  money?: TripMoney
   activeStopId?: string | null
   onDetails?: (stop: RecordData<Stop>) => void
   onHoverStop?: (id: string | null) => void
@@ -75,7 +78,7 @@ export function ItineraryDay({
               {ordered.length} stop{ordered.length === 1 ? '' : 's'}
             </span>
             {legs.length > 0 && <span>· {legs.reduce((a, l) => a + l.km, 0).toFixed(1)} km</span>}
-            {spend > 0 && <span>· ~${spend}/pp</span>}
+            {spend > 0 && <span>· ~{money ? money.local(spend) : `$${spend}`}/pp</span>}
             {dayIssues.length > 0 && (
               <span className="flex items-center gap-1 font-medium text-warning">
                 · <AlertTriangle className="size-3" /> {dayIssues.length}
@@ -132,6 +135,7 @@ export function ItineraryDay({
               <StopCard
                 stop={s.record}
                 destination={trip.destination}
+                money={money}
                 active={activeStopId === s.id}
                 flagged={flagged.has(s.id)}
                 editors={editors.map((e) => e.userName)}
@@ -172,7 +176,7 @@ export function ItineraryDay({
   )
 }
 
-function StopCard({ stop, destination, active, flagged, editors, onClick }: { stop: RecordData<Stop>; destination: string; active?: boolean; flagged: boolean; editors: string[]; onClick: () => void }) {
+function StopCard({ stop, destination, money, active, flagged, editors, onClick }: { stop: RecordData<Stop>; destination: string; money?: TripMoney; active?: boolean; flagged: boolean; editors: string[]; onClick: () => void }) {
   const d = stop.data
   const meta = CATEGORY_META[d.category ?? 'other'] ?? CATEGORY_META.other
   return (
@@ -219,7 +223,7 @@ function StopCard({ stop, destination, active, flagged, editors, onClick }: { st
               {d.end ? `–${d.end}` : ''}
             </span>
           )}
-          {typeof d.costPerPerson === 'number' && d.costPerPerson > 0 && <span>· ${d.costPerPerson}</span>}
+          {typeof d.costPerPerson === 'number' && d.costPerPerson > 0 && <span>· {money ? money.local(d.costPerPerson) : `$${d.costPerPerson}`}</span>}
           {!!d.outdoor && <span>· outdoor</span>}
         </p>
         {d.address && (

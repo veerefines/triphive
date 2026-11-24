@@ -10,6 +10,7 @@ import { cn } from '@/components/ui'
 import { FeaturedCard, PublicTripCard, VIBES, VIBE_EMOJI, fmtDate, type JoinRequest, type Listing, type Profile } from '@/components/social'
 import { FEATURED, featuredNear } from '@/data/featured'
 import { matchLabel, matchTrips } from '@/lib/match'
+import { localIsoDate } from '@/lib/localDate'
 import type { Trip } from '@/components/trip/types'
 
 export default function DiscoverPage() {
@@ -24,7 +25,7 @@ export default function DiscoverPage() {
   const [vibe, setVibe] = useState<string | null>(null)
   const [openOnly, setOpenOnly] = useState(false)
 
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = localIsoDate()
   const myTripIds = useMemo(() => new Set(myTrips.map((t) => t.recordId)), [myTrips])
   const requestFor = (tripId: string) => myRequests.find((r) => r.data.tripId === tripId)?.data.status
 
@@ -156,7 +157,7 @@ export default function DiscoverPage() {
         {featured.length === 0 ? (
           <p className="text-sm text-muted-foreground">No featured places there yet — we’re verifying new cities every week.</p>
         ) : (
-          <div className="scrollbar-none -mx-6 flex gap-4 overflow-x-auto px-6 pb-2">
+          <div className="scrollbar-none -mx-6 flex snap-x snap-mandatory scroll-px-6 gap-4 overflow-x-auto px-6 pb-2 [mask-image:linear-gradient(to_right,black_calc(100%-56px),transparent)]">
             {featured.map((f) => (
               <FeaturedCard key={f.id} place={f} />
             ))}
